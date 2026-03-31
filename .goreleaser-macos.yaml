@@ -41,14 +41,11 @@ brews:
     install: |
       bin.install "egressor"
       pkgshare.install "config.yaml"
-    post_install: |
-      egressor_dir = Pathname.new("#{Dir.home}/.egressor")
-      egressor_dir.mkpath
-      config_dest = egressor_dir/"config.yaml"
-      unless config_dest.exist?
-        cp pkgshare/"config.yaml", config_dest
-        ohai "Config installed to #{config_dest}"
-      end
+    caveats: |
+      Egressor will auto-create ~/.egressor/config.yaml on first run.
+      To set up TLS interception, run:
+        egressor --generate-ca
+        sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.egressor/ca.pem
     service: |
       run [opt_bin/"egressor", "--headless"]
       keep_alive true
