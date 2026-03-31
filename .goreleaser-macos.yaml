@@ -40,10 +40,17 @@ brews:
     license: "MIT"
     install: |
       bin.install "egressor"
-      (etc/"egressor").mkpath
-      etc.install "config.yaml" => "egressor/config.yaml" unless (etc/"egressor/config.yaml").exist?
+      pkgshare.install "config.yaml"
+    post_install: |
+      egressor_dir = Pathname.new("#{ENV["HOME"]}/.egressor")
+      egressor_dir.mkpath
+      config_dest = egressor_dir/"config.yaml"
+      unless config_dest.exist?
+        cp pkgshare/"config.yaml", config_dest
+        ohai "Config installed to #{config_dest}"
+      end
     service: |
-      run [opt_bin/"egressor", "--headless", "--config", etc/"egressor/config.yaml"]
+      run [opt_bin/"egressor", "--headless"]
       keep_alive true
       log_path var/"log/egressor/egressor.log"
       error_log_path var/"log/egressor/egressor-error.log"
