@@ -24,12 +24,9 @@ archives:
     formats:
       - tar.gz
     files:
-      - src: config.yaml
-        dst: .
-      - src: README.md
-        dst: .
-      - src: LICENSE
-        dst: .
+      - config.yaml
+      - README.md
+      - LICENSE
 
 brews:
   - name: egressor
