@@ -21,6 +21,7 @@ Developer Tool  ──HTTPS──►  Egressor  ──HTTPS──►  LLM API
                             (block if denied)
                             (log everything)
 ```
+![img.png](docs/img.png)
 
 ---
 
