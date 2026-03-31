@@ -1,0 +1,21 @@
+listen_address: "127.0.0.1:8080"
+
+policy:
+  deny_file_patterns:
+    - "*.env"
+    - "*.pem"
+    - "*.key"
+    - "**/secrets/**"
+    - "**/credentials*"
+    - ".aws/*"
+
+logging:
+  format: json
+  file: ~/.egressor/logs/audit.log
+  max_size_mb: 2
+
+intercept:
+  ca_cert: ~/.egressor/ca.pem
+  ca_key: ~/.egressor/ca-key.pem
+  log_body: true
+  max_body_size: 1048576    # 1MB

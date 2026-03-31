@@ -27,6 +27,16 @@ go.work.sum
 # env file
 .env
 
+# Logs
+logs/
+
+# Frontend
+internal/ui/frontend/node_modules/
+internal/ui/frontend/dist/
+
 # Editor/IDE
-# .idea/
+.idea/
 # .vscode/
+
+# Build output
+egressor

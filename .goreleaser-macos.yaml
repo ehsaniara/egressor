@@ -1,0 +1,57 @@
+version: 2
+
+builds:
+  - id: egressor-darwin
+    main: ./cmd/egressor
+    binary: egressor
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CGO_LDFLAGS=-framework UniformTypeIdentifiers
+    flags:
+      - -trimpath
+      - -tags=production
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: egressor-darwin
+    builds:
+      - egressor-darwin
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - config.yaml
+      - README.md
+      - LICENSE
+
+brews:
+  - name: egressor
+    repository:
+      owner: ehsaniara
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    directory: Formula
+    homepage: "https://github.com/ehsaniara/egressor"
+    description: "Local-first egress monitoring and control for developer tools"
+    license: "MIT"
+    install: |
+      bin.install "egressor"
+      etc.install "config.yaml" => "egressor/config.yaml"
+    service: |
+      run [opt_bin/"egressor", "--headless", "--config", etc/"egressor/config.yaml"]
+      keep_alive true
+      log_path var/"log/egressor/egressor.log"
+      error_log_path var/"log/egressor/egressor-error.log"
+
+checksum:
+  name_template: "checksums_darwin.txt"
+
+release:
+  github:
+    owner: ehsaniara
+    name: egressor

@@ -1,0 +1,51 @@
+version: 2
+
+builds:
+  - id: egressor-linux-amd64
+    main: ./cmd/egressor
+    binary: egressor
+    goos:
+      - linux
+    goarch:
+      - amd64
+    env:
+      - CGO_ENABLED=0
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+  - id: egressor-linux-arm64
+    main: ./cmd/egressor
+    binary: egressor
+    goos:
+      - linux
+    goarch:
+      - arm64
+    env:
+      - CGO_ENABLED=1
+      - CC=aarch64-linux-gnu-gcc
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - id: egressor-linux
+    builds:
+      - egressor-linux-amd64
+      - egressor-linux-arm64
+    format: tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - config.yaml
+      - README.md
+      - LICENSE
+
+checksum:
+  name_template: "checksums_linux.txt"
+
+release:
+  github:
+    owner: ehsaniara
+    name: egressor

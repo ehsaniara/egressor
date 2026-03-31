@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "egressor",
+  "outputfilename": "egressor",
+  "frontend:install": "cd internal/ui/frontend && npm install",
+  "frontend:build": "cd internal/ui/frontend && npm run build",
+  "frontend:dev:watcher": "cd internal/ui/frontend && npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "ehsaniara"
+  }
+}
