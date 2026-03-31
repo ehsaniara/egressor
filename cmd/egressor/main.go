@@ -109,6 +109,29 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+const defaultConfig = `listen_address: "127.0.0.1:8080"
+
+policy:
+  deny_file_patterns:
+    - "*.env"
+    - "*.pem"
+    - "*.key"
+    - "**/secrets/**"
+    - "**/credentials*"
+    - ".aws/*"
+
+logging:
+  format: json
+  file: ~/.egressor/logs/audit.log
+  max_size_mb: 2
+
+intercept:
+  ca_cert: ~/.egressor/ca.pem
+  ca_key: ~/.egressor/ca-key.pem
+  log_body: true
+  max_body_size: 1048576
+`
+
 func resolveConfigPath(explicit string) string {
 	if explicit != "" {
 		return explicit
@@ -123,8 +146,14 @@ func resolveConfigPath(explicit string) string {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
+		// 3. Auto-create default config at ~/.egressor/config.yaml
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err == nil {
+			if err := os.WriteFile(p, []byte(defaultConfig), 0o644); err == nil {
+				fmt.Printf("  Default config created at %s\n\n", p)
+				return p
+			}
+		}
 	}
-	// Fall back to ./config.yaml (will produce a clear error on load)
 	return "config.yaml"
 }
 
