@@ -20,14 +20,16 @@ builds:
 
 archives:
   - id: egressor-darwin
-    builds:
-      - egressor-darwin
-    format: tar.gz
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats:
+      - tar.gz
     files:
-      - config.yaml
-      - README.md
-      - LICENSE
+      - src: config.yaml
+        dst: .
+      - src: README.md
+        dst: .
+      - src: LICENSE
+        dst: .
 
 brews:
   - name: egressor
@@ -41,7 +43,8 @@ brews:
     license: "MIT"
     install: |
       bin.install "egressor"
-      etc.install "config.yaml" => "egressor/config.yaml"
+      (etc/"egressor").mkpath
+      etc.install "config.yaml" => "egressor/config.yaml" unless (etc/"egressor/config.yaml").exist?
     service: |
       run [opt_bin/"egressor", "--headless", "--config", etc/"egressor/config.yaml"]
       keep_alive true
