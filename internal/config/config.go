@@ -23,7 +23,8 @@ type InterceptConfig struct {
 }
 
 type PolicyConfig struct {
-	DenyFilePatterns []string `yaml:"deny_file_patterns"`
+	DenyFilePatterns   []string `yaml:"deny_file_patterns"`
+	AllowedDirectories []string `yaml:"allowed_directories"`
 }
 
 type LogConfig struct {
@@ -61,6 +62,11 @@ func Load(path string) (*Config, error) {
 	}
 	cfg.Intercept.CACert = expandHome(cfg.Intercept.CACert)
 	cfg.Intercept.CAKey = expandHome(cfg.Intercept.CAKey)
+
+	// Expand allowed directories
+	for i, dir := range cfg.Policy.AllowedDirectories {
+		cfg.Policy.AllowedDirectories[i] = expandHome(dir)
+	}
 
 	// Apply logging defaults
 	if cfg.Logging.File == "" {

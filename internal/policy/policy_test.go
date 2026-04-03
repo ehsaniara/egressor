@@ -68,6 +68,95 @@ func TestEvaluateFiles_Bypassed(t *testing.T) {
 	}
 }
 
+func TestEvaluateScope_InScope(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		AllowedDirectories: []string{"/home/user/project"},
+	})
+
+	tests := []struct {
+		name    string
+		paths   []string
+		allowed bool
+	}{
+		{"file in project", []string{"/home/user/project/main.go"}, true},
+		{"nested file in project", []string{"/home/user/project/src/app.go"}, true},
+		{"file outside project", []string{"/etc/passwd"}, false},
+		{"home dir file", []string{"/home/user/.ssh/id_rsa"}, false},
+		{"sibling project", []string{"/home/user/other-project/main.go"}, false},
+		{"parent traversal", []string{"/home/user/project/../.ssh/id_rsa"}, false},
+		{"mix in and out of scope", []string{"/home/user/project/main.go", "/etc/passwd"}, false},
+		{"empty list", []string{}, true},
+		{"exact dir match", []string{"/home/user/project"}, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := engine.EvaluateScope(tt.paths)
+			if decision.Allowed != tt.allowed {
+				t.Errorf("EvaluateScope(%v) = allowed:%v, want allowed:%v (reason: %s)",
+					tt.paths, decision.Allowed, tt.allowed, decision.Reason)
+			}
+		})
+	}
+}
+
+func TestEvaluateScope_MultipleAllowedDirs(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		AllowedDirectories: []string{"/home/user/project-a", "/home/user/project-b"},
+	})
+
+	tests := []struct {
+		name    string
+		paths   []string
+		allowed bool
+	}{
+		{"file in project-a", []string{"/home/user/project-a/main.go"}, true},
+		{"file in project-b", []string{"/home/user/project-b/main.go"}, true},
+		{"file in neither", []string{"/home/user/project-c/main.go"}, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			decision := engine.EvaluateScope(tt.paths)
+			if decision.Allowed != tt.allowed {
+				t.Errorf("EvaluateScope(%v) = allowed:%v, want allowed:%v (reason: %s)",
+					tt.paths, decision.Allowed, tt.allowed, decision.Reason)
+			}
+		})
+	}
+}
+
+func TestEvaluateScope_NoDirectoriesConfigured(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{})
+	decision := engine.EvaluateScope([]string{"/anywhere/file.go"})
+	if !decision.Allowed {
+		t.Error("expected allowed when no directories configured")
+	}
+}
+
+func TestEvaluateScope_Bypassed(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		AllowedDirectories: []string{"/home/user/project"},
+	})
+	engine.SetBypassed(true)
+	decision := engine.EvaluateScope([]string{"/etc/passwd"})
+	if !decision.Allowed {
+		t.Error("expected allowed when policy bypassed")
+	}
+}
+
+func TestEvaluateScope_ParentTraversal(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		AllowedDirectories: []string{"/home/user/project"},
+	})
+
+	// ../.. traversal should be caught after path cleaning
+	decision := engine.EvaluateScope([]string{"/home/user/project/../../etc/passwd"})
+	if decision.Allowed {
+		t.Error("expected blocked for parent traversal escaping allowed directory")
+	}
+}
+
 func TestMatchFilePattern(t *testing.T) {
 	tests := []struct {
 		path    string

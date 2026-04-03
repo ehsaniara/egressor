@@ -1,6 +1,11 @@
 listen_address: "127.0.0.1:8080"
 
 policy:
+  # Block requests that reference files outside these directories.
+  # If empty, no directory scope is enforced.
+  allowed_directories:
+    # - "~/Projects/my-app"
+
   deny_file_patterns:
     - "*.env"
     - "*.pem"

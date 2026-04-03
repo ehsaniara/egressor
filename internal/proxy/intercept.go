@@ -105,12 +105,39 @@ func (i *Interceptor) Intercept(clientConn net.Conn, upstreamConn net.Conn, host
 				"files", len(files),
 			)
 
-			// Check file policy — block if denied
 			paths := make([]string, len(files))
 			for idx, f := range files {
 				paths[idx] = f.Path
 			}
-			decision := i.policy.EvaluateFiles(paths)
+
+			// Check directory scope — block if any file is outside allowed directories
+			decision := i.policy.EvaluateScope(paths)
+			if !decision.Allowed {
+				slog.Warn("request blocked by directory scope policy",
+					"session", sess.ID,
+					"url", exchange.URL,
+					"reason", decision.Reason,
+				)
+				exchange.StatusCode = 403
+				exchange.Blocked = true
+				exchange.BlockReason = decision.Reason
+				if i.logBody {
+					exchange.RequestBody = truncateBody(bodyStr, i.maxBody)
+				}
+				resp403 := &http.Response{
+					StatusCode: 403,
+					ProtoMajor: 1,
+					ProtoMinor: 1,
+					Header:     http.Header{"Content-Type": {"text/plain"}},
+					Body:       io.NopCloser(strings.NewReader("blocked by egressor: " + decision.Reason)),
+				}
+				resp403.Write(clientTLS)
+				sess.Exchanges = append(sess.Exchanges, exchange)
+				return nil
+			}
+
+			// Check file deny patterns — block if matched
+			decision = i.policy.EvaluateFiles(paths)
 			if !decision.Allowed {
 				slog.Warn("request blocked by file policy",
 					"session", sess.ID,

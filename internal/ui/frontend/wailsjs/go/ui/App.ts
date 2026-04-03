@@ -30,6 +30,22 @@ export function RemoveDenyPattern(pattern: string): Promise<void> {
   return window.go.ui.App.RemoveDenyPattern(pattern);
 }
 
+export function GetAllowedDirectories(): Promise<string[]> {
+  return window.go.ui.App.GetAllowedDirectories();
+}
+
+export function SetAllowedDirectories(dirs: string[]): Promise<void> {
+  return window.go.ui.App.SetAllowedDirectories(dirs);
+}
+
+export function AddAllowedDirectory(dir: string): Promise<void> {
+  return window.go.ui.App.AddAllowedDirectory(dir);
+}
+
+export function RemoveAllowedDirectory(dir: string): Promise<void> {
+  return window.go.ui.App.RemoveAllowedDirectory(dir);
+}
+
 export function IsPolicyBypassed(): Promise<boolean> {
   return window.go.ui.App.IsPolicyBypassed();
 }
