@@ -4,6 +4,9 @@ import {
   SetDenyPatterns,
   AddDenyPattern,
   RemoveDenyPattern,
+  GetAllowedDirectories,
+  AddAllowedDirectory,
+  RemoveAllowedDirectory,
   IsPolicyBypassed,
   SetPolicyBypassed,
   SaveConfig,
@@ -11,10 +14,12 @@ import {
 
 export function usePolicy() {
   const [patterns, setPatterns] = useState<string[]>([]);
+  const [allowedDirs, setAllowedDirs] = useState<string[]>([]);
   const [bypassed, setBypassed] = useState(false);
 
   useEffect(() => {
     GetDenyPatterns().then(setPatterns);
+    GetAllowedDirectories().then(setAllowedDirs);
     IsPolicyBypassed().then(setBypassed);
   }, []);
 
@@ -35,6 +40,18 @@ export function usePolicy() {
     setPatterns(newPatterns);
   }, []);
 
+  const addDirectory = useCallback(async (dir: string) => {
+    await AddAllowedDirectory(dir);
+    const updated = await GetAllowedDirectories();
+    setAllowedDirs(updated);
+  }, []);
+
+  const removeDirectory = useCallback(async (dir: string) => {
+    await RemoveAllowedDirectory(dir);
+    const updated = await GetAllowedDirectories();
+    setAllowedDirs(updated);
+  }, []);
+
   const toggleBypassed = useCallback(async () => {
     const next = !bypassed;
     await SetPolicyBypassed(next);
@@ -45,5 +62,9 @@ export function usePolicy() {
     await SaveConfig();
   }, []);
 
-  return { patterns, bypassed, addPattern, removePattern, updatePatterns, toggleBypassed, save };
+  return {
+    patterns, bypassed, addPattern, removePattern, updatePatterns,
+    allowedDirs, addDirectory, removeDirectory,
+    toggleBypassed, save,
+  };
 }

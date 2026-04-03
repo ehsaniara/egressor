@@ -84,6 +84,31 @@ func (a *App) RemoveDenyPattern(pattern string) {
 	a.engine.RemoveDenyPattern(pattern)
 }
 
+func (a *App) GetAllowedDirectories() []string {
+	return a.engine.GetAllowedDirectories()
+}
+
+func (a *App) SetAllowedDirectories(dirs []string) {
+	a.engine.SetAllowedDirectories(dirs)
+}
+
+func (a *App) AddAllowedDirectory(dir string) {
+	dirs := a.engine.GetAllowedDirectories()
+	dirs = append(dirs, dir)
+	a.engine.SetAllowedDirectories(dirs)
+}
+
+func (a *App) RemoveAllowedDirectory(dir string) {
+	dirs := a.engine.GetAllowedDirectories()
+	filtered := dirs[:0]
+	for _, d := range dirs {
+		if d != dir {
+			filtered = append(filtered, d)
+		}
+	}
+	a.engine.SetAllowedDirectories(filtered)
+}
+
 func (a *App) IsPolicyBypassed() bool {
 	return a.engine.IsBypassed()
 }
@@ -99,6 +124,7 @@ func (a *App) SetPolicyBypassed(bypassed bool) {
 
 func (a *App) SaveConfig() error {
 	a.cfg.Policy.DenyFilePatterns = a.engine.GetDenyPatterns()
+	a.cfg.Policy.AllowedDirectories = a.engine.GetAllowedDirectories()
 	return config.Save(a.cfgPath, a.cfg)
 }
 

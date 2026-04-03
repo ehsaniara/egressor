@@ -77,6 +77,9 @@ function App() {
               patterns={policy.patterns}
               onAdd={policy.addPattern}
               onRemove={policy.removePattern}
+              allowedDirs={policy.allowedDirs}
+              onAddDir={policy.addDirectory}
+              onRemoveDir={policy.removeDirectory}
               onSave={policy.save}
             />
           </div>
