@@ -86,6 +86,7 @@ func main() {
 	slog.Info("TLS interception enabled")
 
 	if *headless {
+		interceptor.SetResolver(policy.HeadlessResolver{})
 		server := proxy.NewServer(cfg.ListenAddress, logger, interceptor)
 		runHeadless(server, cfg)
 		return
@@ -96,6 +97,7 @@ func main() {
 	sink := audit.NewMultiSink(logger, store)
 	server := proxy.NewServer(cfg.ListenAddress, sink, interceptor)
 	app := ui.NewApp(server, store, engine, cfg, resolvedConfig)
+	interceptor.SetResolver(app)
 
 	slog.Info("egressor starting", "address", cfg.ListenAddress, "mode", "ui")
 	if err := ui.RunUI(app); err != nil {
@@ -124,6 +126,11 @@ policy:
     - "**/secrets/**"
     - "**/credentials*"
     - ".aws/*"
+
+  # Keywords that trigger interactive approval before sending to LLM.
+  # deny_content_keywords:
+  #   - "CONFIDENTIAL"
+  #   - "INTERNAL ONLY"
 
 logging:
   format: json

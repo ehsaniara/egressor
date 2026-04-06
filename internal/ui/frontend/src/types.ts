@@ -35,3 +35,13 @@ export interface StoreStats {
   blocked_count: number;
   file_detections: number;
 }
+
+export interface ContentPrompt {
+  id: string;
+  session_id: string;
+  url: string;
+  matched_keyword: string;
+  file_paths: string[];
+}
+
+export type PromptAction = 'allow_once' | 'allow_always' | 'block_once' | 'block_always';

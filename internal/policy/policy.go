@@ -156,6 +156,177 @@ func resolvePath(p string) string {
 	return p
 }
 
+// --- Content keyword methods ---
+
+// GetDenyContentKeywords returns the current deny content keywords.
+func (e *Engine) GetDenyContentKeywords() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]string, len(e.cfg.DenyContentKeywords))
+	copy(out, e.cfg.DenyContentKeywords)
+	return out
+}
+
+// SetDenyContentKeywords replaces all deny content keywords.
+func (e *Engine) SetDenyContentKeywords(keywords []string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cfg.DenyContentKeywords = make([]string, len(keywords))
+	copy(e.cfg.DenyContentKeywords, keywords)
+}
+
+// AddDenyContentKeyword appends a single deny content keyword.
+func (e *Engine) AddDenyContentKeyword(keyword string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.cfg.DenyContentKeywords = append(e.cfg.DenyContentKeywords, keyword)
+}
+
+// RemoveDenyContentKeyword removes a single deny content keyword.
+func (e *Engine) RemoveDenyContentKeyword(keyword string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	filtered := e.cfg.DenyContentKeywords[:0]
+	for _, k := range e.cfg.DenyContentKeywords {
+		if k != keyword {
+			filtered = append(filtered, k)
+		}
+	}
+	e.cfg.DenyContentKeywords = filtered
+}
+
+// GetContentKeywordWhitelist returns file paths that bypass content keyword checks.
+func (e *Engine) GetContentKeywordWhitelist() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]string, len(e.cfg.ContentKeywordWhitelist))
+	copy(out, e.cfg.ContentKeywordWhitelist)
+	return out
+}
+
+// AddToContentKeywordWhitelist adds a file path to the content keyword whitelist.
+func (e *Engine) AddToContentKeywordWhitelist(path string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, p := range e.cfg.ContentKeywordWhitelist {
+		if p == path {
+			return
+		}
+	}
+	e.cfg.ContentKeywordWhitelist = append(e.cfg.ContentKeywordWhitelist, path)
+}
+
+// RemoveFromContentKeywordWhitelist removes a file path from the whitelist.
+func (e *Engine) RemoveFromContentKeywordWhitelist(path string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	filtered := e.cfg.ContentKeywordWhitelist[:0]
+	for _, p := range e.cfg.ContentKeywordWhitelist {
+		if p != path {
+			filtered = append(filtered, p)
+		}
+	}
+	e.cfg.ContentKeywordWhitelist = filtered
+}
+
+// GetContentKeywordBlacklist returns file paths that are always blocked by content keyword checks.
+func (e *Engine) GetContentKeywordBlacklist() []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make([]string, len(e.cfg.ContentKeywordBlacklist))
+	copy(out, e.cfg.ContentKeywordBlacklist)
+	return out
+}
+
+// AddToContentKeywordBlacklist adds a file path to the content keyword blacklist.
+func (e *Engine) AddToContentKeywordBlacklist(path string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	for _, p := range e.cfg.ContentKeywordBlacklist {
+		if p == path {
+			return
+		}
+	}
+	e.cfg.ContentKeywordBlacklist = append(e.cfg.ContentKeywordBlacklist, path)
+}
+
+// RemoveFromContentKeywordBlacklist removes a file path from the blacklist.
+func (e *Engine) RemoveFromContentKeywordBlacklist(path string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	filtered := e.cfg.ContentKeywordBlacklist[:0]
+	for _, p := range e.cfg.ContentKeywordBlacklist {
+		if p != path {
+			filtered = append(filtered, p)
+		}
+	}
+	e.cfg.ContentKeywordBlacklist = filtered
+}
+
+// ContentKeywordResult holds the outcome of a content keyword evaluation.
+type ContentKeywordResult struct {
+	HasMatch       bool
+	MatchedKeyword string
+	AutoAllowed    []string // file paths resolved by whitelist
+	AutoBlocked    []string // file paths resolved by blacklist
+	NeedPrompt     []string // file paths needing user decision
+}
+
+// EvaluateContentKeywords scans the body for deny_content_keywords and partitions
+// detected file paths into whitelist-allowed, blacklist-blocked, and needs-prompt.
+func (e *Engine) EvaluateContentKeywords(body string, filePaths []string) ContentKeywordResult {
+	if e.bypassed.Load() {
+		return ContentKeywordResult{}
+	}
+
+	e.mu.RLock()
+	keywords := make([]string, len(e.cfg.DenyContentKeywords))
+	copy(keywords, e.cfg.DenyContentKeywords)
+	whitelist := make(map[string]bool, len(e.cfg.ContentKeywordWhitelist))
+	for _, p := range e.cfg.ContentKeywordWhitelist {
+		whitelist[p] = true
+	}
+	blacklist := make(map[string]bool, len(e.cfg.ContentKeywordBlacklist))
+	for _, p := range e.cfg.ContentKeywordBlacklist {
+		blacklist[p] = true
+	}
+	e.mu.RUnlock()
+
+	if len(keywords) == 0 {
+		return ContentKeywordResult{}
+	}
+
+	// Case-insensitive keyword scan
+	bodyLower := strings.ToLower(body)
+	var matchedKeyword string
+	for _, kw := range keywords {
+		if strings.Contains(bodyLower, strings.ToLower(kw)) {
+			matchedKeyword = kw
+			break
+		}
+	}
+	if matchedKeyword == "" {
+		return ContentKeywordResult{}
+	}
+
+	// Partition file paths by whitelist/blacklist
+	result := ContentKeywordResult{
+		HasMatch:       true,
+		MatchedKeyword: matchedKeyword,
+	}
+	for _, fp := range filePaths {
+		switch {
+		case whitelist[fp]:
+			result.AutoAllowed = append(result.AutoAllowed, fp)
+		case blacklist[fp]:
+			result.AutoBlocked = append(result.AutoBlocked, fp)
+		default:
+			result.NeedPrompt = append(result.NeedPrompt, fp)
+		}
+	}
+	return result
+}
+
 // EvaluateFiles checks if any detected file paths match deny_file_patterns.
 func (e *Engine) EvaluateFiles(paths []string) Decision {
 	if e.bypassed.Load() {

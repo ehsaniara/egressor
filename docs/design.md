@@ -29,8 +29,13 @@ Egressor is a local HTTPS intercepting proxy that monitors and controls outbound
 │       ├──▶ Check allowed_directories         │
 │       │     └─ OUT OF SCOPE → 403            │
 │       ├──▶ Check deny_file_patterns          │
-│       │     ├─ BLOCKED → 403 to client       │
-│       │     └─ ALLOWED → forward upstream    │
+│       │     └─ BLOCKED → 403 to client       │
+│       ├──▶ Check deny_content_keywords       │
+│       │     ├─ WHITELIST → auto-allow        │
+│       │     ├─ BLACKLIST → auto-block 403    │
+│       │     └─ PROMPT USER → allow/block     │
+│       │                                      │
+│       └──▶ ALLOWED → forward upstream        │
 │       │                                      │
 │       ▼                                      │
 │  ┌──────────┐  ┌───────────────┐             │
@@ -72,6 +77,7 @@ For each connection:
    - Extract file references from the body
    - Evaluate file paths against `allowed_directories` — block if out of scope
    - Evaluate file paths against `deny_file_patterns` — block if matched
+   - Scan body for `deny_content_keywords` — check whitelist/blacklist, prompt user if needed
    - If blocked: send 403 back to client, log, stop
    - If allowed: forward request to upstream, relay response back
 4. Record exchange in session
@@ -103,7 +109,15 @@ Two-layer policy enforcement:
 - Pattern matching: `filepath.Match` for globs, `**/` prefix for recursive matching, basename fallback
 - Runtime mutation: `GetDenyPatterns()`, `SetDenyPatterns()`, `AddDenyPattern()`, `RemoveDenyPattern()`
 
-Both layers:
+**Content keyword approval** — `EvaluateContentKeywords(body string, filePaths []string) ContentKeywordResult`:
+- Case-insensitive substring scan of body against `deny_content_keywords`
+- Partitions files into whitelist-allowed, blacklist-blocked, and needs-prompt
+- Interactive: pauses request, emits `content:prompt` event, waits for user decision (30s timeout)
+- User choices: Allow Once, Allow Always (whitelist), Block Once, Block Always (blacklist)
+- `PromptResolver` interface: `App` implements for UI mode, `HeadlessResolver` blocks by default
+- Whitelist/blacklist persisted to config via SaveConfig
+
+All layers:
 - Pause/bypass via atomic bool (for UI toggle)
 - Thread-safe with `sync.RWMutex`
 

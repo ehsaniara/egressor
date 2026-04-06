@@ -1,16 +1,19 @@
 import { useState } from 'react';
 import { useSessions } from './hooks/useSessions';
 import { usePolicy } from './hooks/usePolicy';
+import { useContentPrompts } from './hooks/useContentPrompts';
 import { SessionTable } from './components/SessionTable';
 import { SessionDetail } from './components/SessionDetail';
 import { ProxyControls } from './components/ProxyControls';
 import { PolicyEditor } from './components/PolicyEditor';
+import { ContentPromptModal } from './components/ContentPromptModal';
 
 type Tab = 'sessions' | 'policy';
 
 function App() {
   const { sessions, stats } = useSessions();
   const policy = usePolicy();
+  const { current: currentPrompt, resolve: resolvePrompt } = useContentPrompts();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<Tab>('sessions');
 
@@ -72,7 +75,7 @@ function App() {
             )}
           </>
         ) : (
-          <div className="w-full max-w-2xl">
+          <div className="w-full max-w-2xl overflow-auto">
             <PolicyEditor
               patterns={policy.patterns}
               onAdd={policy.addPattern}
@@ -80,6 +83,13 @@ function App() {
               allowedDirs={policy.allowedDirs}
               onAddDir={policy.addDirectory}
               onRemoveDir={policy.removeDirectory}
+              contentKeywords={policy.contentKeywords}
+              onAddKeyword={policy.addContentKeyword}
+              onRemoveKeyword={policy.removeContentKeyword}
+              whitelist={policy.whitelist}
+              onRemoveWhitelist={policy.removeFromWhitelist}
+              blacklist={policy.blacklist}
+              onRemoveBlacklist={policy.removeFromBlacklist}
               onSave={policy.save}
             />
           </div>
@@ -92,6 +102,14 @@ function App() {
         bypassed={policy.bypassed}
         onToggleBypassed={policy.toggleBypassed}
       />
+
+      {/* Content keyword prompt modal */}
+      {currentPrompt && (
+        <ContentPromptModal
+          prompt={currentPrompt}
+          onResolve={resolvePrompt}
+        />
+      )}
     </div>
   );
 }

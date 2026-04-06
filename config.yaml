@@ -14,6 +14,11 @@ policy:
     - "**/credentials*"
     - ".aws/*"
 
+  # Keywords that trigger interactive approval before sending to LLM.
+  deny_content_keywords:
+    - "CONFIDENTIAL"
+    - "INTERNAL ONLY"
+
 logging:
   format: json
   file: ~/.egressor/logs/audit.log

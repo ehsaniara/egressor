@@ -157,6 +157,154 @@ func TestEvaluateScope_ParentTraversal(t *testing.T) {
 	}
 }
 
+func TestEvaluateContentKeywords_Match(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords: []string{"CONFIDENTIAL", "INTERNAL ONLY"},
+	})
+
+	result := engine.EvaluateContentKeywords("This document is CONFIDENTIAL and should not be shared", []string{"doc.txt"})
+	if !result.HasMatch {
+		t.Fatal("expected match")
+	}
+	if result.MatchedKeyword != "CONFIDENTIAL" {
+		t.Errorf("expected keyword CONFIDENTIAL, got %q", result.MatchedKeyword)
+	}
+	if len(result.NeedPrompt) != 1 || result.NeedPrompt[0] != "doc.txt" {
+		t.Errorf("expected doc.txt in NeedPrompt, got %v", result.NeedPrompt)
+	}
+}
+
+func TestEvaluateContentKeywords_CaseInsensitive(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords: []string{"confidential"},
+	})
+
+	result := engine.EvaluateContentKeywords("This is CONFIDENTIAL data", []string{"file.go"})
+	if !result.HasMatch {
+		t.Error("expected case-insensitive match")
+	}
+}
+
+func TestEvaluateContentKeywords_NoMatch(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords: []string{"CONFIDENTIAL"},
+	})
+
+	result := engine.EvaluateContentKeywords("This is a normal document", []string{"file.go"})
+	if result.HasMatch {
+		t.Error("expected no match")
+	}
+}
+
+func TestEvaluateContentKeywords_NoKeywords(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{})
+
+	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"file.go"})
+	if result.HasMatch {
+		t.Error("expected no match when no keywords configured")
+	}
+}
+
+func TestEvaluateContentKeywords_Bypassed(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords: []string{"CONFIDENTIAL"},
+	})
+	engine.SetBypassed(true)
+
+	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"file.go"})
+	if result.HasMatch {
+		t.Error("expected no match when policy bypassed")
+	}
+}
+
+func TestEvaluateContentKeywords_WhitelistBypass(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords:     []string{"CONFIDENTIAL"},
+		ContentKeywordWhitelist: []string{"trusted.go"},
+	})
+
+	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"trusted.go", "untrusted.go"})
+	if !result.HasMatch {
+		t.Fatal("expected match")
+	}
+	if len(result.AutoAllowed) != 1 || result.AutoAllowed[0] != "trusted.go" {
+		t.Errorf("expected trusted.go in AutoAllowed, got %v", result.AutoAllowed)
+	}
+	if len(result.NeedPrompt) != 1 || result.NeedPrompt[0] != "untrusted.go" {
+		t.Errorf("expected untrusted.go in NeedPrompt, got %v", result.NeedPrompt)
+	}
+}
+
+func TestEvaluateContentKeywords_BlacklistBlock(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords:     []string{"CONFIDENTIAL"},
+		ContentKeywordBlacklist: []string{"blocked.go"},
+	})
+
+	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"blocked.go", "other.go"})
+	if !result.HasMatch {
+		t.Fatal("expected match")
+	}
+	if len(result.AutoBlocked) != 1 || result.AutoBlocked[0] != "blocked.go" {
+		t.Errorf("expected blocked.go in AutoBlocked, got %v", result.AutoBlocked)
+	}
+	if len(result.NeedPrompt) != 1 || result.NeedPrompt[0] != "other.go" {
+		t.Errorf("expected other.go in NeedPrompt, got %v", result.NeedPrompt)
+	}
+}
+
+func TestEvaluateContentKeywords_AllWhitelisted(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentKeywords:     []string{"CONFIDENTIAL"},
+		ContentKeywordWhitelist: []string{"a.go", "b.go"},
+	})
+
+	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"a.go", "b.go"})
+	if !result.HasMatch {
+		t.Fatal("expected match")
+	}
+	if len(result.NeedPrompt) != 0 {
+		t.Errorf("expected empty NeedPrompt when all whitelisted, got %v", result.NeedPrompt)
+	}
+	if len(result.AutoAllowed) != 2 {
+		t.Errorf("expected 2 AutoAllowed, got %v", result.AutoAllowed)
+	}
+}
+
+func TestContentKeywordWhitelistCRUD(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{})
+
+	engine.AddToContentKeywordWhitelist("file.go")
+	engine.AddToContentKeywordWhitelist("file.go") // duplicate
+	wl := engine.GetContentKeywordWhitelist()
+	if len(wl) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(wl))
+	}
+
+	engine.RemoveFromContentKeywordWhitelist("file.go")
+	wl = engine.GetContentKeywordWhitelist()
+	if len(wl) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(wl))
+	}
+}
+
+func TestContentKeywordBlacklistCRUD(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{})
+
+	engine.AddToContentKeywordBlacklist("file.go")
+	engine.AddToContentKeywordBlacklist("file.go") // duplicate
+	bl := engine.GetContentKeywordBlacklist()
+	if len(bl) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(bl))
+	}
+
+	engine.RemoveFromContentKeywordBlacklist("file.go")
+	bl = engine.GetContentKeywordBlacklist()
+	if len(bl) != 0 {
+		t.Fatalf("expected 0 entries, got %d", len(bl))
+	}
+}
+
 func TestMatchFilePattern(t *testing.T) {
 	tests := []struct {
 		path    string
