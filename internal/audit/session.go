@@ -1,3 +1,5 @@
+// Package audit provides session logging, storage, and observation
+// for intercepted proxy traffic.
 package audit
 
 import (

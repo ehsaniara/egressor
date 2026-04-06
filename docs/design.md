@@ -26,6 +26,8 @@ Egressor is a local HTTPS intercepting proxy that monitors and controls outbound
 │  └────┬─────────┘                            │
 │       │                                      │
 │       ├──▶ Extract file references           │
+│       ├──▶ Check allowed_directories         │
+│       │     └─ OUT OF SCOPE → 403            │
 │       ├──▶ Check deny_file_patterns          │
 │       │     ├─ BLOCKED → 403 to client       │
 │       │     └─ ALLOWED → forward upstream    │
@@ -68,7 +70,8 @@ For each connection:
 3. HTTP/1.1 relay loop:
    - Read full request body into buffer
    - Extract file references from the body
-   - Evaluate file paths against `deny_file_patterns`
+   - Evaluate file paths against `allowed_directories` — block if out of scope
+   - Evaluate file paths against `deny_file_patterns` — block if matched
    - If blocked: send 403 back to client, log, stop
    - If allowed: forward request to upstream, relay response back
 4. Record exchange in session
@@ -87,11 +90,20 @@ Returns `[]FileRef{Path, Source}` where Source is `"json_field"` or `"text_patte
 
 ### Policy Engine (`internal/policy/policy.go`)
 
-File-pattern-based policy enforcement:
+Two-layer policy enforcement:
 
-- `EvaluateFiles(paths []string) Decision` — checks paths against `deny_file_patterns`
+**Directory scope** — `EvaluateScope(paths []string) Decision`:
+- Checks if file paths fall within `allowed_directories`
+- Resolves relative paths against cwd, cleans `../` traversals
+- If no directories configured, all paths are allowed (default)
+- Runtime mutation: `GetAllowedDirectories()`, `SetAllowedDirectories()`
+
+**File pattern deny** — `EvaluateFiles(paths []string) Decision`:
+- Checks paths against `deny_file_patterns`
 - Pattern matching: `filepath.Match` for globs, `**/` prefix for recursive matching, basename fallback
 - Runtime mutation: `GetDenyPatterns()`, `SetDenyPatterns()`, `AddDenyPattern()`, `RemoveDenyPattern()`
+
+Both layers:
 - Pause/bypass via atomic bool (for UI toggle)
 - Thread-safe with `sync.RWMutex`
 
@@ -138,7 +150,7 @@ File-pattern-based policy enforcement:
 **React frontend** (`internal/ui/frontend/`):
 - Sessions tab: live table with real-time updates via `EventsOn("session:new")`
 - Detail panel: request/response inspector with JSON viewer, detected files, blocked indicator
-- Policy tab: editable deny patterns with save-to-config
+- Policy tab: allowed directories and deny patterns with save-to-config
 - Bottom bar: proxy controls, policy pause/resume, stats
 
 ### Configuration (`internal/config/config.go`)
@@ -160,11 +172,12 @@ File-pattern-based policy enforcement:
 5. Interceptor: TLS handshake with upstream (real cert)
 6. Interceptor: read HTTP request, buffer body
 7. Extract: scan body → detected_files: ["src/main.go"]
-8. Policy: EvaluateFiles(["src/main.go"]) → allowed
-9. Interceptor: forward request to upstream
-10. Interceptor: read response, forward to client
-11. Logger: write session JSON to audit.log
-12. Store: add session, emit "session:new" event → UI
+8. Policy: EvaluateScope(["src/main.go"]) → in scope
+9. Policy: EvaluateFiles(["src/main.go"]) → allowed
+10. Interceptor: forward request to upstream
+11. Interceptor: read response, forward to client
+12. Logger: write session JSON to audit.log
+13. Store: add session, emit "session:new" event → UI
 ```
 
 ### Blocked request
@@ -172,10 +185,11 @@ File-pattern-based policy enforcement:
 ```
 1-6. Same as above
 7. Extract: scan body → detected_files: [".env"]
-8. Policy: EvaluateFiles([".env"]) → denied (matches "*.env")
-9. Interceptor: send 403 back to client over TLS
-10. Logger: write session with blocked=true, block_reason
-11. Store: add session → UI shows red row
+8. Policy: EvaluateScope([".env"]) → in scope (or blocked if outside allowed dirs)
+9. Policy: EvaluateFiles([".env"]) → denied (matches "*.env")
+10. Interceptor: send 403 back to client over TLS
+11. Logger: write session with blocked=true, block_reason
+12. Store: add session → UI shows red row
 ```
 
 ## Security Considerations
@@ -195,7 +209,7 @@ internal/
     proxy.go                          TCP listener, CONNECT handler, lifecycle
     intercept.go                      TLS MITM, HTTP relay, file extraction, blocking
   policy/
-    policy.go                         deny_file_patterns matching engine
+    policy.go                         Directory scope + deny pattern engine
   audit/
     session.go                        Session, InterceptedExchange, FileRef models
     logger.go                         JSON file logger with rotation
@@ -220,7 +234,7 @@ internal/
           SessionDetail.tsx           Exchange inspector
           RequestPane.tsx             Request headers + body + files
           ResponsePane.tsx            Response headers + body
-          PolicyEditor.tsx            Deny pattern CRUD
+          PolicyEditor.tsx            Allowed dirs + deny pattern CRUD
           ProxyControls.tsx           Start/stop/pause + stats
           JsonViewer.tsx              Formatted JSON display
         hooks/

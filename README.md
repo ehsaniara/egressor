@@ -1,5 +1,9 @@
 # Egressor
 
+[![CI](https://github.com/ehsaniara/egressor/actions/workflows/ci.yml/badge.svg)](https://github.com/ehsaniara/egressor/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/ehsaniara/egressor)](https://goreportcard.com/report/github.com/ehsaniara/egressor)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 **Local-first egress monitoring and control for developer tools**
 
 ---
@@ -10,6 +14,7 @@ Egressor is a local HTTPS proxy that intercepts outbound traffic from developer 
 
 - **TLS interception** — decrypts and inspects HTTPS payloads via a local CA
 - **File detection** — identifies file paths and contents in API request bodies
+- **Directory scope enforcement** — blocks requests referencing files outside allowed project directories
 - **File blocking** — prevents sensitive files (`.env`, `.pem`, secrets) from being sent
 - **Desktop UI** — real-time session inspector with request/response viewer
 - **Audit logging** — structured JSON logs with automatic rotation
@@ -102,6 +107,11 @@ egressor --version
 listen_address: "127.0.0.1:8080"
 
 policy:
+  # Block requests that reference files outside these directories.
+  # If empty, no directory scope is enforced.
+  allowed_directories:
+    # - "~/Projects/my-app"
+
   deny_file_patterns:
     - "*.env"
     - "*.pem"
@@ -121,6 +131,15 @@ intercept:
   log_body: true
   max_body_size: 1048576    # 1MB
 ```
+
+### Allowed directories
+
+When `allowed_directories` is set, any request containing file references outside those directories is blocked. This prevents LLM tools from accessing files beyond the intended project scope (e.g. `~/.ssh`, `/etc/passwd`, `~/.aws/credentials`).
+
+- Relative paths are resolved against the current working directory
+- Path traversals (`../`) are cleaned before evaluation
+- Multiple directories can be specified
+- Leave empty to allow all directories (default)
 
 ### Deny file patterns
 
@@ -144,7 +163,7 @@ The default mode opens a native desktop window (built with Wails + React):
 
 - **Sessions tab** — live table of intercepted connections with method, host, status, file count
 - **Detail panel** — click a session to see full request/response headers, body (JSON-formatted), and detected files
-- **Policy tab** — edit deny file patterns, add/remove patterns, save to config
+- **Policy tab** — manage allowed directories and deny file patterns, save to config
 - **Bottom bar** — proxy start/stop, pause/resume policy, session stats
 
 Blocked requests are highlighted in red with the matching deny pattern shown.
@@ -165,9 +184,10 @@ Client ──TLS(egressor cert)──► Egressor ──TLS(real cert)──► 
 4. Egressor opens its own TLS connection to the real server
 5. Sitting between two decrypted streams, it reads the plaintext HTTP request
 6. Extracts file references from the JSON payload
-7. Checks file paths against `deny_file_patterns`
-8. If blocked: returns `403`, logs the attempt, never forwards to the server
-9. If allowed: forwards the request, captures the response, logs everything
+7. Checks file paths against `allowed_directories` — blocks if out of scope
+8. Checks file paths against `deny_file_patterns` — blocks if matched
+9. If blocked: returns `403`, logs the attempt, never forwards to the server
+10. If allowed: forwards the request, captures the response, logs everything
 
 ### File detection
 
