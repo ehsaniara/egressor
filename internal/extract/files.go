@@ -1,3 +1,5 @@
+// Package extract detects file references in HTTP request bodies
+// sent to LLM APIs.
 package extract
 
 import (

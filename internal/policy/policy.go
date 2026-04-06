@@ -1,3 +1,5 @@
+// Package policy implements directory scope and file pattern enforcement
+// for intercepted requests.
 package policy
 
 import (
@@ -106,7 +108,8 @@ func (e *Engine) EvaluateScope(paths []string) Decision {
 	}
 
 	e.mu.RLock()
-	allowedDirs := e.cfg.AllowedDirectories
+	allowedDirs := make([]string, len(e.cfg.AllowedDirectories))
+	copy(allowedDirs, e.cfg.AllowedDirectories)
 	e.mu.RUnlock()
 
 	if len(allowedDirs) == 0 {
@@ -160,7 +163,8 @@ func (e *Engine) EvaluateFiles(paths []string) Decision {
 	}
 
 	e.mu.RLock()
-	patterns := e.cfg.DenyFilePatterns
+	patterns := make([]string, len(e.cfg.DenyFilePatterns))
+	copy(patterns, e.cfg.DenyFilePatterns)
 	e.mu.RUnlock()
 
 	if len(patterns) == 0 {

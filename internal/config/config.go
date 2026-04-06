@@ -1,3 +1,4 @@
+// Package config handles YAML configuration loading, defaults, and persistence.
 package config
 
 import (

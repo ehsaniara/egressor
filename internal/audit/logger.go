@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -54,6 +55,7 @@ func NewLogger(format, file string, maxSize int64) (*Logger, error) {
 func (l *Logger) Log(s *Session) {
 	data, err := json.Marshal(s)
 	if err != nil {
+		slog.Error("failed to marshal session", "err", err)
 		return
 	}
 	data = append(data, '\n')
@@ -74,7 +76,9 @@ func (l *Logger) rotate() {
 
 	// Rename current log to audit.log.<unix_epoch>
 	rotated := fmt.Sprintf("%s.%d", l.file, time.Now().Unix())
-	os.Rename(l.file, rotated)
+	if err := os.Rename(l.file, rotated); err != nil {
+		slog.Error("failed to rotate log file", "err", err)
+	}
 
 	f, err := os.OpenFile(l.file, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {

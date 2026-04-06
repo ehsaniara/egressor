@@ -1,3 +1,5 @@
+// Package proxy implements an HTTPS intercepting proxy with TLS MITM
+// for monitoring and controlling outbound traffic.
 package proxy
 
 import (
