@@ -24,8 +24,11 @@ type InterceptConfig struct {
 }
 
 type PolicyConfig struct {
-	DenyFilePatterns   []string `yaml:"deny_file_patterns"`
-	AllowedDirectories []string `yaml:"allowed_directories"`
+	DenyFilePatterns        []string `yaml:"deny_file_patterns"`
+	AllowedDirectories      []string `yaml:"allowed_directories"`
+	DenyContentKeywords     []string `yaml:"deny_content_keywords"`
+	ContentKeywordWhitelist []string `yaml:"content_keyword_whitelist"`
+	ContentKeywordBlacklist []string `yaml:"content_keyword_blacklist"`
 }
 
 type LogConfig struct {

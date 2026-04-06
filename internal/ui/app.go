@@ -3,6 +3,8 @@ package ui
 import (
 	"context"
 	"log/slog"
+	"sync"
+	"time"
 
 	"github.com/ehsaniara/egressor/internal/audit"
 	"github.com/ehsaniara/egressor/internal/config"
@@ -20,15 +22,19 @@ type App struct {
 	engine  *policy.Engine
 	cfg     *config.Config
 	cfgPath string
+
+	pendingMu      sync.Mutex
+	pendingPrompts map[string]chan policy.ContentPromptResponse
 }
 
 func NewApp(server *proxy.Server, store *audit.SessionStore, engine *policy.Engine, cfg *config.Config, cfgPath string) *App {
 	return &App{
-		server:  server,
-		store:   store,
-		engine:  engine,
-		cfg:     cfg,
-		cfgPath: cfgPath,
+		server:         server,
+		store:          store,
+		engine:         engine,
+		cfg:            cfg,
+		cfgPath:        cfgPath,
+		pendingPrompts: make(map[string]chan policy.ContentPromptResponse),
 	}
 }
 
@@ -66,7 +72,7 @@ func (a *App) GetStats() audit.StoreStats {
 	return a.store.Stats()
 }
 
-// --- Policy management ---
+// --- Policy management: deny patterns ---
 
 func (a *App) GetDenyPatterns() []string {
 	return a.engine.GetDenyPatterns()
@@ -83,6 +89,8 @@ func (a *App) AddDenyPattern(pattern string) {
 func (a *App) RemoveDenyPattern(pattern string) {
 	a.engine.RemoveDenyPattern(pattern)
 }
+
+// --- Policy management: allowed directories ---
 
 func (a *App) GetAllowedDirectories() []string {
 	return a.engine.GetAllowedDirectories()
@@ -109,6 +117,42 @@ func (a *App) RemoveAllowedDirectory(dir string) {
 	a.engine.SetAllowedDirectories(filtered)
 }
 
+// --- Policy management: content keywords ---
+
+func (a *App) GetDenyContentKeywords() []string {
+	return a.engine.GetDenyContentKeywords()
+}
+
+func (a *App) SetDenyContentKeywords(keywords []string) {
+	a.engine.SetDenyContentKeywords(keywords)
+}
+
+func (a *App) AddDenyContentKeyword(keyword string) {
+	a.engine.AddDenyContentKeyword(keyword)
+}
+
+func (a *App) RemoveDenyContentKeyword(keyword string) {
+	a.engine.RemoveDenyContentKeyword(keyword)
+}
+
+func (a *App) GetContentKeywordWhitelist() []string {
+	return a.engine.GetContentKeywordWhitelist()
+}
+
+func (a *App) RemoveFromContentKeywordWhitelist(path string) {
+	a.engine.RemoveFromContentKeywordWhitelist(path)
+}
+
+func (a *App) GetContentKeywordBlacklist() []string {
+	return a.engine.GetContentKeywordBlacklist()
+}
+
+func (a *App) RemoveFromContentKeywordBlacklist(path string) {
+	a.engine.RemoveFromContentKeywordBlacklist(path)
+}
+
+// --- Policy bypass ---
+
 func (a *App) IsPolicyBypassed() bool {
 	return a.engine.IsBypassed()
 }
@@ -122,9 +166,78 @@ func (a *App) SetPolicyBypassed(bypassed bool) {
 	}
 }
 
+// --- Content keyword prompt resolution ---
+
+// PromptUser implements policy.PromptResolver. It emits a Wails event and blocks
+// until the frontend calls ResolveContentPrompt or the 30s timeout expires.
+func (a *App) PromptUser(prompt policy.ContentPrompt) policy.ContentPromptResponse {
+	ch := make(chan policy.ContentPromptResponse, 1)
+
+	a.pendingMu.Lock()
+	a.pendingPrompts[prompt.ID] = ch
+	a.pendingMu.Unlock()
+
+	wailsRuntime.EventsEmit(a.ctx, "content:prompt", prompt)
+
+	select {
+	case resp := <-ch:
+		return resp
+	case <-time.After(30 * time.Second):
+		a.pendingMu.Lock()
+		delete(a.pendingPrompts, prompt.ID)
+		a.pendingMu.Unlock()
+		slog.Warn("content prompt timed out, blocking",
+			"prompt_id", prompt.ID,
+			"keyword", prompt.MatchedKeyword,
+		)
+		return policy.ContentPromptResponse{Action: policy.PromptBlockOnce}
+	}
+}
+
+// ResolveContentPrompt is called by the frontend to respond to a content keyword prompt.
+func (a *App) ResolveContentPrompt(promptID string, action string) {
+	a.pendingMu.Lock()
+	ch, ok := a.pendingPrompts[promptID]
+	if ok {
+		delete(a.pendingPrompts, promptID)
+	}
+	a.pendingMu.Unlock()
+
+	if !ok {
+		return
+	}
+
+	promptAction := policy.PromptAction(action)
+
+	// Handle persistent decisions
+	// For allow_always/block_always, we apply to all files from the original prompt.
+	// The interceptor already has the file paths; the whitelist/blacklist stores them.
+	// We retrieve pending prompt info from the channel interaction.
+
+	ch <- policy.ContentPromptResponse{Action: promptAction}
+}
+
+// ResolveContentPromptForFile is called by the frontend with a specific file path
+// for whitelist/blacklist persistence, separate from the blocking resolution.
+func (a *App) ResolveContentPromptForFile(action string, filePath string) {
+	switch policy.PromptAction(action) {
+	case policy.PromptAllowAlways:
+		a.engine.AddToContentKeywordWhitelist(filePath)
+		slog.Info("file added to content keyword whitelist", "path", filePath)
+	case policy.PromptBlockAlways:
+		a.engine.AddToContentKeywordBlacklist(filePath)
+		slog.Info("file added to content keyword blacklist", "path", filePath)
+	}
+}
+
+// --- Config persistence ---
+
 func (a *App) SaveConfig() error {
 	a.cfg.Policy.DenyFilePatterns = a.engine.GetDenyPatterns()
 	a.cfg.Policy.AllowedDirectories = a.engine.GetAllowedDirectories()
+	a.cfg.Policy.DenyContentKeywords = a.engine.GetDenyContentKeywords()
+	a.cfg.Policy.ContentKeywordWhitelist = a.engine.GetContentKeywordWhitelist()
+	a.cfg.Policy.ContentKeywordBlacklist = a.engine.GetContentKeywordBlacklist()
 	return config.Save(a.cfgPath, a.cfg)
 }
 

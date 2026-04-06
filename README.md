@@ -120,6 +120,11 @@ policy:
     - "**/credentials*"
     - ".aws/*"
 
+  # Keywords that trigger interactive approval
+  deny_content_keywords:
+    - "CONFIDENTIAL"
+    - "INTERNAL ONLY"
+
 logging:
   format: json
   file: ~/.egressor/logs/audit.log
@@ -155,6 +160,17 @@ Glob patterns that block requests containing matching file references:
 
 When a request body contains a file matching a deny pattern, Egressor returns `403` to the client and logs the blocked request — the payload never reaches the LLM.
 
+### Content keywords (interactive approval)
+
+When `deny_content_keywords` is set, request bodies are scanned for these keywords (case-insensitive). If a match is found, Egressor pauses the request and prompts the user in the desktop UI with four options:
+
+- **Allow Once** — forward this request, don't remember
+- **Allow Always** — forward and add the file to the whitelist (never ask again)
+- **Block Once** — return 403, don't remember
+- **Block Always** — return 403 and add the file to the blacklist (auto-block in future)
+
+The whitelist and blacklist are persisted to `config.yaml` via "Save to config". In headless mode, keyword matches are blocked by default (no UI to prompt).
+
 ---
 
 ## Desktop UI
@@ -163,7 +179,7 @@ The default mode opens a native desktop window (built with Wails + React):
 
 - **Sessions tab** — live table of intercepted connections with method, host, status, file count
 - **Detail panel** — click a session to see full request/response headers, body (JSON-formatted), and detected files
-- **Policy tab** — manage allowed directories and deny file patterns, save to config
+- **Policy tab** — manage allowed directories, deny file patterns, content keywords, whitelist/blacklist
 - **Bottom bar** — proxy start/stop, pause/resume policy, session stats
 
 Blocked requests are highlighted in red with the matching deny pattern shown.
@@ -186,8 +202,9 @@ Client ──TLS(egressor cert)──► Egressor ──TLS(real cert)──► 
 6. Extracts file references from the JSON payload
 7. Checks file paths against `allowed_directories` — blocks if out of scope
 8. Checks file paths against `deny_file_patterns` — blocks if matched
-9. If blocked: returns `403`, logs the attempt, never forwards to the server
-10. If allowed: forwards the request, captures the response, logs everything
+9. Scans body for `deny_content_keywords` — prompts user if matched (whitelist/blacklist checked first)
+10. If blocked: returns `403`, logs the attempt, never forwards to the server
+11. If allowed: forwards the request, captures the response, logs everything
 
 ### File detection
 

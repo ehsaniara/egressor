@@ -24,16 +24,22 @@ type Interceptor struct {
 	logBody   bool
 	maxBody   int
 	policy    *policy.Engine
+	resolver  policy.PromptResolver
 }
 
 // NewInterceptor creates an interceptor backed by the given CA authority.
-func NewInterceptor(authority *ca.Authority, logBody bool, maxBody int, policy *policy.Engine) *Interceptor {
+func NewInterceptor(authority *ca.Authority, logBody bool, maxBody int, pol *policy.Engine) *Interceptor {
 	return &Interceptor{
 		certCache: ca.NewCertCache(authority),
 		logBody:   logBody,
 		maxBody:   maxBody,
-		policy:    policy,
+		policy:    pol,
 	}
+}
+
+// SetResolver sets the prompt resolver for interactive content keyword approval.
+func (i *Interceptor) SetResolver(r policy.PromptResolver) {
+	i.resolver = r
 }
 
 // Intercept performs TLS MITM on an established CONNECT tunnel.
@@ -161,6 +167,75 @@ func (i *Interceptor) Intercept(clientConn net.Conn, upstreamConn net.Conn, host
 				resp403.Write(clientTLS)
 				sess.Exchanges = append(sess.Exchanges, exchange)
 				return nil
+			}
+
+			// Check content keywords — interactive approval
+			kwResult := i.policy.EvaluateContentKeywords(bodyStr, paths)
+			if kwResult.HasMatch {
+				// Auto-blocked files from blacklist
+				if len(kwResult.AutoBlocked) > 0 {
+					reason := fmt.Sprintf("file %q is blacklisted (keyword %q)", kwResult.AutoBlocked[0], kwResult.MatchedKeyword)
+					slog.Warn("request blocked by content keyword blacklist",
+						"session", sess.ID,
+						"url", exchange.URL,
+						"reason", reason,
+					)
+					exchange.StatusCode = 403
+					exchange.Blocked = true
+					exchange.BlockReason = reason
+					if i.logBody {
+						exchange.RequestBody = truncateBody(bodyStr, i.maxBody)
+					}
+					resp403 := &http.Response{
+						StatusCode: 403,
+						ProtoMajor: 1,
+						ProtoMinor: 1,
+						Header:     http.Header{"Content-Type": {"text/plain"}},
+						Body:       io.NopCloser(strings.NewReader("blocked by egressor: " + reason)),
+					}
+					resp403.Write(clientTLS)
+					sess.Exchanges = append(sess.Exchanges, exchange)
+					return nil
+				}
+
+				// Files needing user prompt
+				if len(kwResult.NeedPrompt) > 0 && i.resolver != nil {
+					promptID := fmt.Sprintf("%s-%d", sess.ID, time.Now().UnixNano())
+					prompt := policy.ContentPrompt{
+						ID:             promptID,
+						SessionID:      sess.ID,
+						URL:            exchange.URL,
+						MatchedKeyword: kwResult.MatchedKeyword,
+						FilePaths:      kwResult.NeedPrompt,
+					}
+					slog.Info("content keyword match, prompting user",
+						"session", sess.ID,
+						"keyword", kwResult.MatchedKeyword,
+						"files", kwResult.NeedPrompt,
+					)
+					resp := i.resolver.PromptUser(prompt)
+					switch resp.Action {
+					case policy.PromptBlockOnce, policy.PromptBlockAlways:
+						reason := fmt.Sprintf("user blocked: keyword %q in files %v", kwResult.MatchedKeyword, kwResult.NeedPrompt)
+						exchange.StatusCode = 403
+						exchange.Blocked = true
+						exchange.BlockReason = reason
+						if i.logBody {
+							exchange.RequestBody = truncateBody(bodyStr, i.maxBody)
+						}
+						resp403 := &http.Response{
+							StatusCode: 403,
+							ProtoMajor: 1,
+							ProtoMinor: 1,
+							Header:     http.Header{"Content-Type": {"text/plain"}},
+							Body:       io.NopCloser(strings.NewReader("blocked by egressor: " + reason)),
+						}
+						resp403.Write(clientTLS)
+						sess.Exchanges = append(sess.Exchanges, exchange)
+						return nil
+					}
+					// allow_once or allow_always — continue forwarding
+				}
 			}
 		}
 
