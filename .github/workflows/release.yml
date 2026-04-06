@@ -84,7 +84,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release-windows:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: build-frontend
     steps:
       - uses: actions/checkout@v4
@@ -99,11 +99,6 @@ jobs:
         with:
           name: frontend-dist
           path: internal/ui/frontend/dist/
-
-      - name: Install cross-compilation tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-mingw-w64
 
       - uses: goreleaser/goreleaser-action@v6
         with:
