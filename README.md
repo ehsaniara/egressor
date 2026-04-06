@@ -40,12 +40,29 @@ brew tap ehsaniara/tap
 brew install egressor
 ```
 
-**From source:**
+**From source (macOS):**
 ```bash
 git clone https://github.com/ehsaniara/egressor.git
 cd egressor
 cd internal/ui/frontend && npm install && npm run build && cd ../../..
 CGO_LDFLAGS="-framework UniformTypeIdentifiers" go build -tags production -o egressor ./cmd/egressor
+```
+
+**From source (Windows, requires Go 1.24+ and Node.js 22+):**
+
+```powershell
+git clone https://github.com/ehsaniara/egressor.git
+cd egressor
+cd internal\ui\frontend; npm install; npm run build; cd ..\..\..
+go build -tags production -o egressor.exe ./cmd/egressor
+```
+
+**From source (Linux, headless):**
+
+```bash
+git clone https://github.com/ehsaniara/egressor.git
+cd egressor
+go build -o egressor ./cmd/egressor
 ```
 
 ### Setup
@@ -57,17 +74,42 @@ On first run, Egressor auto-generates a CA certificate and prints trust instruct
 ```
 
 Trust the CA (required for TLS interception):
+
+**macOS:**
 ```bash
 sudo security add-trusted-cert -d -r trustRoot \
   -k /Library/Keychains/System.keychain ~/.egressor/ca.pem
 ```
 
+**Windows (PowerShell as Administrator):**
+
+```powershell
+Import-Certificate -FilePath "$env:USERPROFILE\.egressor\ca.pem" `
+  -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+**Linux:**
+
+```bash
+sudo cp ~/.egressor/ca.pem /usr/local/share/ca-certificates/egressor.crt
+sudo update-ca-certificates
+```
+
 ### Configure your tools
 
-For Node.js-based tools (Claude Code, Kiro, Cursor):
+Set the proxy and CA certificate for your LLM tools:
+
+**macOS / Linux:**
 ```bash
 export NODE_EXTRA_CA_CERTS=~/.egressor/ca.pem
 export HTTPS_PROXY=http://127.0.0.1:8080
+```
+
+**Windows (PowerShell):**
+
+```powershell
+$env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.egressor\ca.pem"
+$env:HTTPS_PROXY = "http://127.0.0.1:8080"
 ```
 
 Then launch your tool — all HTTPS traffic flows through Egressor.
@@ -313,11 +355,12 @@ git push origin v0.1.0
 
 This builds binaries for:
 
-| OS | Arch | Mode |
-|---|---|---|
-| macOS | amd64, arm64 | Desktop UI |
-| Linux | amd64, arm64 | Headless |
-| Windows | amd64, arm64 | Headless |
+| OS      | Arch         | Mode       |
+|---------|--------------|------------|
+| macOS   | amd64, arm64 | Desktop UI |
+| Windows | amd64        | Desktop UI |
+| Windows | arm64        | Headless   |
+| Linux   | amd64, arm64 | Headless   |
 
 Binaries are published to [GitHub Releases](https://github.com/ehsaniara/egressor/releases) and the Homebrew tap.
 
