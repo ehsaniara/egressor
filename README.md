@@ -97,22 +97,52 @@ sudo update-ca-certificates
 
 ### Configure your tools
 
-Set the proxy and CA certificate for your LLM tools:
-
 **macOS / Linux:**
 ```bash
 export NODE_EXTRA_CA_CERTS=~/.egressor/ca.pem
 export HTTPS_PROXY=http://127.0.0.1:8080
 ```
 
-**Windows (PowerShell):**
+Then launch your tool — all HTTPS traffic flows through Egressor.
 
+### Windows step-by-step setup
+
+**1. Download and extract** Egressor from [GitHub Releases](https://github.com/ehsaniara/egressor/releases) (or build from source).
+
+**2. Run Egressor once** — it auto-generates the CA certificate on first start:
+```powershell
+.\egressor.exe
+```
+
+**3. Trust the CA (run PowerShell as Administrator):**
+```powershell
+Import-Certificate -FilePath "$env:USERPROFILE\.egressor\ca.pem" `
+  -CertStoreLocation Cert:\LocalMachine\Root
+```
+
+**4. Set environment variables (current session):**
 ```powershell
 $env:NODE_EXTRA_CA_CERTS = "$env:USERPROFILE\.egressor\ca.pem"
 $env:HTTPS_PROXY = "http://127.0.0.1:8080"
 ```
 
-Then launch your tool — all HTTPS traffic flows through Egressor.
+To make these persist across sessions:
+```powershell
+[Environment]::SetEnvironmentVariable("NODE_EXTRA_CA_CERTS", "$env:USERPROFILE\.egressor\ca.pem", "User")
+[Environment]::SetEnvironmentVariable("HTTPS_PROXY", "http://127.0.0.1:8080", "User")
+```
+
+**5. Start Egressor:**
+```powershell
+.\egressor.exe
+```
+
+**6. Launch your LLM tool** (Claude Code, Kiro, Cursor, etc.) — all HTTPS traffic to LLM APIs now flows through Egressor.
+
+To stop intercepting, close Egressor and remove the environment variables:
+```powershell
+[Environment]::SetEnvironmentVariable("HTTPS_PROXY", $null, "User")
+```
 
 ---
 
