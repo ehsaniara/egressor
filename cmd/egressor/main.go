@@ -127,6 +127,10 @@ policy:
     - "**/credentials*"
     - ".aws/*"
 
+  # Tags that developers add to files (e.g. // NO_LLM) to hard-block them.
+  deny_content_tags:
+    - "NO_LLM"
+
   # Keywords that trigger interactive approval before sending to LLM.
   # deny_content_keywords:
   #   - "CONFIDENTIAL"

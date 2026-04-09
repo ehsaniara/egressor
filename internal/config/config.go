@@ -24,11 +24,12 @@ type InterceptConfig struct {
 }
 
 type PolicyConfig struct {
-	DenyFilePatterns        []string `yaml:"deny_file_patterns"`
-	AllowedDirectories      []string `yaml:"allowed_directories"`
-	DenyContentKeywords     []string `yaml:"deny_content_keywords"`
-	ContentKeywordWhitelist []string `yaml:"content_keyword_whitelist"`
-	ContentKeywordBlacklist []string `yaml:"content_keyword_blacklist"`
+	DenyFilePatterns    []string `yaml:"deny_file_patterns"`
+	AllowedDirectories  []string `yaml:"allowed_directories"`
+	DenyContentTags     []string `yaml:"deny_content_tags"`
+	DenyContentKeywords []string `yaml:"deny_content_keywords"`
+	ContentWhitelist    []string `yaml:"content_whitelist"`
+	ContentBlacklist    []string `yaml:"content_blacklist"`
 }
 
 type LogConfig struct {

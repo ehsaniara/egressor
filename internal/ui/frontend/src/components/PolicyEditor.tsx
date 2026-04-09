@@ -7,6 +7,9 @@ interface Props {
   allowedDirs: string[];
   onAddDir: (dir: string) => void;
   onRemoveDir: (dir: string) => void;
+  contentTags: string[];
+  onAddTag: (tag: string) => void;
+  onRemoveTag: (tag: string) => void;
   contentKeywords: string[];
   onAddKeyword: (keyword: string) => void;
   onRemoveKeyword: (keyword: string) => void;
@@ -20,6 +23,7 @@ interface Props {
 export function PolicyEditor({
   patterns, onAdd, onRemove,
   allowedDirs, onAddDir, onRemoveDir,
+  contentTags, onAddTag, onRemoveTag,
   contentKeywords, onAddKeyword, onRemoveKeyword,
   whitelist, onRemoveWhitelist,
   blacklist, onRemoveBlacklist,
@@ -27,6 +31,7 @@ export function PolicyEditor({
 }: Props) {
   const [patternInput, setPatternInput] = useState('');
   const [dirInput, setDirInput] = useState('');
+  const [tagInput, setTagInput] = useState('');
   const [keywordInput, setKeywordInput] = useState('');
   const [saved, setSaved] = useState(false);
 
@@ -35,6 +40,14 @@ export function PolicyEditor({
     if (trimmed && !patterns.includes(trimmed)) {
       onAdd(trimmed);
       setPatternInput('');
+    }
+  };
+
+  const handleAddTag = () => {
+    const trimmed = tagInput.trim();
+    if (trimmed && !contentTags.includes(trimmed)) {
+      onAddTag(trimmed);
+      setTagInput('');
     }
   };
 
@@ -98,8 +111,19 @@ export function PolicyEditor({
         <ItemList items={patterns} onRemove={onRemove} color="text-gray-300" empty="No deny patterns configured." />
       </Section>
 
-      {/* Content Keywords */}
-      <Section title="Content Keywords" description="Request bodies containing these keywords will require interactive approval before sending.">
+      {/* Content Tags (hard block) */}
+      <Section title="Content Tags (hard block)" description="Developers add these tags (e.g. // NO_LLM) to files that must never be sent to LLMs. Requests containing these tags are blocked immediately — no prompt.">
+        <AddInput
+          value={tagInput}
+          onChange={setTagInput}
+          onAdd={handleAddTag}
+          placeholder='e.g. NO_LLM'
+        />
+        <ItemList items={contentTags} onRemove={onRemoveTag} color="text-red-300" empty="No content tags configured." />
+      </Section>
+
+      {/* Content Keywords (interactive) */}
+      <Section title="Content Keywords (interactive)" description="Request bodies containing these keywords will prompt for approval. Users can whitelist or blacklist files to avoid repeated prompts.">
         <AddInput
           value={keywordInput}
           onChange={setKeywordInput}

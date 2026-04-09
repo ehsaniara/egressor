@@ -169,6 +169,32 @@ func (i *Interceptor) Intercept(clientConn net.Conn, upstreamConn net.Conn, host
 				return nil
 			}
 
+			// Check content tags — hard block (e.g. NO_LLM)
+			decision = i.policy.EvaluateContentTags(bodyStr)
+			if !decision.Allowed {
+				slog.Warn("request blocked by content tag",
+					"session", sess.ID,
+					"url", exchange.URL,
+					"reason", decision.Reason,
+				)
+				exchange.StatusCode = 403
+				exchange.Blocked = true
+				exchange.BlockReason = decision.Reason
+				if i.logBody {
+					exchange.RequestBody = truncateBody(bodyStr, i.maxBody)
+				}
+				resp403 := &http.Response{
+					StatusCode: 403,
+					ProtoMajor: 1,
+					ProtoMinor: 1,
+					Header:     http.Header{"Content-Type": {"text/plain"}},
+					Body:       io.NopCloser(strings.NewReader("blocked by egressor: " + decision.Reason)),
+				}
+				resp403.Write(clientTLS)
+				sess.Exchanges = append(sess.Exchanges, exchange)
+				return nil
+			}
+
 			// Check content keywords — interactive approval
 			kwResult := i.policy.EvaluateContentKeywords(bodyStr, paths)
 			if kwResult.HasMatch {

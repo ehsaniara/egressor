@@ -83,6 +83,9 @@ function App() {
               allowedDirs={policy.allowedDirs}
               onAddDir={policy.addDirectory}
               onRemoveDir={policy.removeDirectory}
+              contentTags={policy.contentTags}
+              onAddTag={policy.addContentTag}
+              onRemoveTag={policy.removeContentTag}
               contentKeywords={policy.contentKeywords}
               onAddKeyword={policy.addContentKeyword}
               onRemoveKeyword={policy.removeContentKeyword}

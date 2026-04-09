@@ -157,6 +157,60 @@ func TestEvaluateScope_ParentTraversal(t *testing.T) {
 	}
 }
 
+func TestEvaluateContentTags_Match(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentTags: []string{"NO_LLM"},
+	})
+
+	decision := engine.EvaluateContentTags("// NO_LLM\npackage secrets\nvar key = \"abc\"")
+	if decision.Allowed {
+		t.Error("expected blocked when body contains NO_LLM tag")
+	}
+}
+
+func TestEvaluateContentTags_CaseInsensitive(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentTags: []string{"NO_LLM"},
+	})
+
+	decision := engine.EvaluateContentTags("# no_llm\nimport os")
+	if decision.Allowed {
+		t.Error("expected case-insensitive match for NO_LLM")
+	}
+}
+
+func TestEvaluateContentTags_NoMatch(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentTags: []string{"NO_LLM"},
+	})
+
+	decision := engine.EvaluateContentTags("package main\nfunc main() {}")
+	if !decision.Allowed {
+		t.Error("expected allowed when body does not contain tag")
+	}
+}
+
+func TestEvaluateContentTags_NoTags(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{})
+
+	decision := engine.EvaluateContentTags("// NO_LLM\npackage main")
+	if !decision.Allowed {
+		t.Error("expected allowed when no tags configured")
+	}
+}
+
+func TestEvaluateContentTags_Bypassed(t *testing.T) {
+	engine := NewEngine(config.PolicyConfig{
+		DenyContentTags: []string{"NO_LLM"},
+	})
+	engine.SetBypassed(true)
+
+	decision := engine.EvaluateContentTags("// NO_LLM")
+	if !decision.Allowed {
+		t.Error("expected allowed when policy bypassed")
+	}
+}
+
 func TestEvaluateContentKeywords_Match(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{
 		DenyContentKeywords: []string{"CONFIDENTIAL", "INTERNAL ONLY"},
@@ -219,8 +273,8 @@ func TestEvaluateContentKeywords_Bypassed(t *testing.T) {
 
 func TestEvaluateContentKeywords_WhitelistBypass(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{
-		DenyContentKeywords:     []string{"CONFIDENTIAL"},
-		ContentKeywordWhitelist: []string{"trusted.go"},
+		DenyContentKeywords: []string{"CONFIDENTIAL"},
+		ContentWhitelist:    []string{"trusted.go"},
 	})
 
 	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"trusted.go", "untrusted.go"})
@@ -237,8 +291,8 @@ func TestEvaluateContentKeywords_WhitelistBypass(t *testing.T) {
 
 func TestEvaluateContentKeywords_BlacklistBlock(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{
-		DenyContentKeywords:     []string{"CONFIDENTIAL"},
-		ContentKeywordBlacklist: []string{"blocked.go"},
+		DenyContentKeywords: []string{"CONFIDENTIAL"},
+		ContentBlacklist:    []string{"blocked.go"},
 	})
 
 	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"blocked.go", "other.go"})
@@ -255,8 +309,8 @@ func TestEvaluateContentKeywords_BlacklistBlock(t *testing.T) {
 
 func TestEvaluateContentKeywords_AllWhitelisted(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{
-		DenyContentKeywords:     []string{"CONFIDENTIAL"},
-		ContentKeywordWhitelist: []string{"a.go", "b.go"},
+		DenyContentKeywords: []string{"CONFIDENTIAL"},
+		ContentWhitelist:    []string{"a.go", "b.go"},
 	})
 
 	result := engine.EvaluateContentKeywords("CONFIDENTIAL data", []string{"a.go", "b.go"})
@@ -271,35 +325,35 @@ func TestEvaluateContentKeywords_AllWhitelisted(t *testing.T) {
 	}
 }
 
-func TestContentKeywordWhitelistCRUD(t *testing.T) {
+func TestContentWhitelistCRUD(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{})
 
-	engine.AddToContentKeywordWhitelist("file.go")
-	engine.AddToContentKeywordWhitelist("file.go") // duplicate
-	wl := engine.GetContentKeywordWhitelist()
+	engine.AddToContentWhitelist("file.go")
+	engine.AddToContentWhitelist("file.go") // duplicate
+	wl := engine.GetContentWhitelist()
 	if len(wl) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(wl))
 	}
 
-	engine.RemoveFromContentKeywordWhitelist("file.go")
-	wl = engine.GetContentKeywordWhitelist()
+	engine.RemoveFromContentWhitelist("file.go")
+	wl = engine.GetContentWhitelist()
 	if len(wl) != 0 {
 		t.Fatalf("expected 0 entries, got %d", len(wl))
 	}
 }
 
-func TestContentKeywordBlacklistCRUD(t *testing.T) {
+func TestContentBlacklistCRUD(t *testing.T) {
 	engine := NewEngine(config.PolicyConfig{})
 
-	engine.AddToContentKeywordBlacklist("file.go")
-	engine.AddToContentKeywordBlacklist("file.go") // duplicate
-	bl := engine.GetContentKeywordBlacklist()
+	engine.AddToContentBlacklist("file.go")
+	engine.AddToContentBlacklist("file.go") // duplicate
+	bl := engine.GetContentBlacklist()
 	if len(bl) != 1 {
 		t.Fatalf("expected 1 entry, got %d", len(bl))
 	}
 
-	engine.RemoveFromContentKeywordBlacklist("file.go")
-	bl = engine.GetContentKeywordBlacklist()
+	engine.RemoveFromContentBlacklist("file.go")
+	bl = engine.GetContentBlacklist()
 	if len(bl) != 0 {
 		t.Fatalf("expected 0 entries, got %d", len(bl))
 	}
