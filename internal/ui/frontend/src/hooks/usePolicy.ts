@@ -7,13 +7,16 @@ import {
   GetAllowedDirectories,
   AddAllowedDirectory,
   RemoveAllowedDirectory,
+  GetDenyContentTags,
+  AddDenyContentTag,
+  RemoveDenyContentTag,
   GetDenyContentKeywords,
   AddDenyContentKeyword,
   RemoveDenyContentKeyword,
-  GetContentKeywordWhitelist,
-  RemoveFromContentKeywordWhitelist,
-  GetContentKeywordBlacklist,
-  RemoveFromContentKeywordBlacklist,
+  GetContentWhitelist,
+  RemoveFromContentWhitelist,
+  GetContentBlacklist,
+  RemoveFromContentBlacklist,
   IsPolicyBypassed,
   SetPolicyBypassed,
   SaveConfig,
@@ -22,6 +25,7 @@ import {
 export function usePolicy() {
   const [patterns, setPatterns] = useState<string[]>([]);
   const [allowedDirs, setAllowedDirs] = useState<string[]>([]);
+  const [contentTags, setContentTags] = useState<string[]>([]);
   const [contentKeywords, setContentKeywords] = useState<string[]>([]);
   const [whitelist, setWhitelist] = useState<string[]>([]);
   const [blacklist, setBlacklist] = useState<string[]>([]);
@@ -30,9 +34,10 @@ export function usePolicy() {
   useEffect(() => {
     GetDenyPatterns().then(setPatterns);
     GetAllowedDirectories().then(setAllowedDirs);
+    GetDenyContentTags().then(setContentTags);
     GetDenyContentKeywords().then(setContentKeywords);
-    GetContentKeywordWhitelist().then(setWhitelist);
-    GetContentKeywordBlacklist().then(setBlacklist);
+    GetContentWhitelist().then(setWhitelist);
+    GetContentBlacklist().then(setBlacklist);
     IsPolicyBypassed().then(setBypassed);
   }, []);
 
@@ -63,7 +68,18 @@ export function usePolicy() {
     setAllowedDirs(await GetAllowedDirectories());
   }, []);
 
-  // Content keywords
+  // Content tags (hard block)
+  const addContentTag = useCallback(async (tag: string) => {
+    await AddDenyContentTag(tag);
+    setContentTags(await GetDenyContentTags());
+  }, []);
+
+  const removeContentTag = useCallback(async (tag: string) => {
+    await RemoveDenyContentTag(tag);
+    setContentTags(await GetDenyContentTags());
+  }, []);
+
+  // Content keywords (interactive)
   const addContentKeyword = useCallback(async (keyword: string) => {
     await AddDenyContentKeyword(keyword);
     setContentKeywords(await GetDenyContentKeywords());
@@ -76,14 +92,14 @@ export function usePolicy() {
 
   // Whitelist
   const removeFromWhitelist = useCallback(async (path: string) => {
-    await RemoveFromContentKeywordWhitelist(path);
-    setWhitelist(await GetContentKeywordWhitelist());
+    await RemoveFromContentWhitelist(path);
+    setWhitelist(await GetContentWhitelist());
   }, []);
 
   // Blacklist
   const removeFromBlacklist = useCallback(async (path: string) => {
-    await RemoveFromContentKeywordBlacklist(path);
-    setBlacklist(await GetContentKeywordBlacklist());
+    await RemoveFromContentBlacklist(path);
+    setBlacklist(await GetContentBlacklist());
   }, []);
 
   // Bypass
@@ -100,6 +116,7 @@ export function usePolicy() {
   return {
     patterns, bypassed, addPattern, removePattern, updatePatterns,
     allowedDirs, addDirectory, removeDirectory,
+    contentTags, addContentTag, removeContentTag,
     contentKeywords, addContentKeyword, removeContentKeyword,
     whitelist, removeFromWhitelist,
     blacklist, removeFromBlacklist,

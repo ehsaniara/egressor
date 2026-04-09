@@ -97,6 +97,58 @@ func TestLimitWriter(t *testing.T) {
 	}
 }
 
+func TestShouldSkipContentScan(t *testing.T) {
+	i := &Interceptor{
+		skipContentTypes: []string{
+			"image/*",
+			"audio/*",
+			"video/*",
+			"application/octet-stream",
+			"application/zip",
+			"application/pdf",
+		},
+	}
+
+	tests := []struct {
+		contentType string
+		skip        bool
+	}{
+		// Should skip
+		{"image/png", true},
+		{"image/jpeg", true},
+		{"Image/PNG", true}, // case insensitive
+		{"audio/mpeg", true},
+		{"video/mp4", true},
+		{"application/octet-stream", true},
+		{"application/zip", true},
+		{"application/pdf", true},
+		{"image/png; charset=utf-8", true}, // with parameters
+
+		// Should NOT skip
+		{"application/json", false},
+		{"text/plain", false},
+		{"text/html; charset=utf-8", false},
+		{"", false}, // empty
+		{"application/javascript", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.contentType, func(t *testing.T) {
+			got := i.shouldSkipContentScan(tt.contentType)
+			if got != tt.skip {
+				t.Errorf("shouldSkipContentScan(%q) = %v, want %v", tt.contentType, got, tt.skip)
+			}
+		})
+	}
+}
+
+func TestShouldSkipContentScan_Empty(t *testing.T) {
+	i := &Interceptor{skipContentTypes: nil}
+	if i.shouldSkipContentScan("image/png") {
+		t.Error("expected no skip when skipContentTypes is nil")
+	}
+}
+
 type byteWriter struct {
 	buf *[]byte
 }

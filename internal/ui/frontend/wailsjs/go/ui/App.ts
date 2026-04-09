@@ -46,7 +46,20 @@ export function RemoveAllowedDirectory(dir: string): Promise<void> {
   return window.go.ui.App.RemoveAllowedDirectory(dir);
 }
 
-// Content keywords
+// Content tags (hard block)
+export function GetDenyContentTags(): Promise<string[]> {
+  return window.go.ui.App.GetDenyContentTags();
+}
+
+export function AddDenyContentTag(tag: string): Promise<void> {
+  return window.go.ui.App.AddDenyContentTag(tag);
+}
+
+export function RemoveDenyContentTag(tag: string): Promise<void> {
+  return window.go.ui.App.RemoveDenyContentTag(tag);
+}
+
+// Content keywords (interactive)
 export function GetDenyContentKeywords(): Promise<string[]> {
   return window.go.ui.App.GetDenyContentKeywords();
 }
@@ -63,20 +76,20 @@ export function RemoveDenyContentKeyword(keyword: string): Promise<void> {
   return window.go.ui.App.RemoveDenyContentKeyword(keyword);
 }
 
-export function GetContentKeywordWhitelist(): Promise<string[]> {
-  return window.go.ui.App.GetContentKeywordWhitelist();
+export function GetContentWhitelist(): Promise<string[]> {
+  return window.go.ui.App.GetContentWhitelist();
 }
 
-export function RemoveFromContentKeywordWhitelist(path: string): Promise<void> {
-  return window.go.ui.App.RemoveFromContentKeywordWhitelist(path);
+export function RemoveFromContentWhitelist(path: string): Promise<void> {
+  return window.go.ui.App.RemoveFromContentWhitelist(path);
 }
 
-export function GetContentKeywordBlacklist(): Promise<string[]> {
-  return window.go.ui.App.GetContentKeywordBlacklist();
+export function GetContentBlacklist(): Promise<string[]> {
+  return window.go.ui.App.GetContentBlacklist();
 }
 
-export function RemoveFromContentKeywordBlacklist(path: string): Promise<void> {
-  return window.go.ui.App.RemoveFromContentKeywordBlacklist(path);
+export function RemoveFromContentBlacklist(path: string): Promise<void> {
+  return window.go.ui.App.RemoveFromContentBlacklist(path);
 }
 
 // Content prompt resolution

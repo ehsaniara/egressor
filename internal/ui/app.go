@@ -10,6 +10,7 @@ import (
 	"github.com/ehsaniara/egressor/internal/config"
 	"github.com/ehsaniara/egressor/internal/policy"
 	"github.com/ehsaniara/egressor/internal/proxy"
+	"github.com/ehsaniara/egressor/internal/tray"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -50,6 +51,24 @@ func (a *App) Startup(ctx context.Context) {
 	// Auto-start the proxy
 	if err := a.server.Start(); err != nil {
 		slog.Error("failed to start proxy", "err", err)
+	}
+
+	// Start system tray icon (macOS menu bar)
+	if tray.Available() {
+		go tray.Run(tray.Callbacks{
+			OnPauseToggle: func(paused bool) {
+				a.engine.SetBypassed(paused)
+				if paused {
+					slog.Info("policy paused via tray")
+				} else {
+					slog.Info("policy resumed via tray")
+				}
+			},
+			OnQuit: func() {
+				a.server.Stop()
+				wailsRuntime.Quit(a.ctx)
+			},
+		})
 	}
 }
 
@@ -117,7 +136,25 @@ func (a *App) RemoveAllowedDirectory(dir string) {
 	a.engine.SetAllowedDirectories(filtered)
 }
 
-// --- Policy management: content keywords ---
+// --- Policy management: content tags (hard block) ---
+
+func (a *App) GetDenyContentTags() []string {
+	return a.engine.GetDenyContentTags()
+}
+
+func (a *App) SetDenyContentTags(tags []string) {
+	a.engine.SetDenyContentTags(tags)
+}
+
+func (a *App) AddDenyContentTag(tag string) {
+	a.engine.AddDenyContentTag(tag)
+}
+
+func (a *App) RemoveDenyContentTag(tag string) {
+	a.engine.RemoveDenyContentTag(tag)
+}
+
+// --- Policy management: content keywords (interactive) ---
 
 func (a *App) GetDenyContentKeywords() []string {
 	return a.engine.GetDenyContentKeywords()
@@ -135,20 +172,20 @@ func (a *App) RemoveDenyContentKeyword(keyword string) {
 	a.engine.RemoveDenyContentKeyword(keyword)
 }
 
-func (a *App) GetContentKeywordWhitelist() []string {
-	return a.engine.GetContentKeywordWhitelist()
+func (a *App) GetContentWhitelist() []string {
+	return a.engine.GetContentWhitelist()
 }
 
-func (a *App) RemoveFromContentKeywordWhitelist(path string) {
-	a.engine.RemoveFromContentKeywordWhitelist(path)
+func (a *App) RemoveFromContentWhitelist(path string) {
+	a.engine.RemoveFromContentWhitelist(path)
 }
 
-func (a *App) GetContentKeywordBlacklist() []string {
-	return a.engine.GetContentKeywordBlacklist()
+func (a *App) GetContentBlacklist() []string {
+	return a.engine.GetContentBlacklist()
 }
 
-func (a *App) RemoveFromContentKeywordBlacklist(path string) {
-	a.engine.RemoveFromContentKeywordBlacklist(path)
+func (a *App) RemoveFromContentBlacklist(path string) {
+	a.engine.RemoveFromContentBlacklist(path)
 }
 
 // --- Policy bypass ---
@@ -222,10 +259,10 @@ func (a *App) ResolveContentPrompt(promptID string, action string) {
 func (a *App) ResolveContentPromptForFile(action string, filePath string) {
 	switch policy.PromptAction(action) {
 	case policy.PromptAllowAlways:
-		a.engine.AddToContentKeywordWhitelist(filePath)
+		a.engine.AddToContentWhitelist(filePath)
 		slog.Info("file added to content keyword whitelist", "path", filePath)
 	case policy.PromptBlockAlways:
-		a.engine.AddToContentKeywordBlacklist(filePath)
+		a.engine.AddToContentBlacklist(filePath)
 		slog.Info("file added to content keyword blacklist", "path", filePath)
 	}
 }
@@ -235,9 +272,10 @@ func (a *App) ResolveContentPromptForFile(action string, filePath string) {
 func (a *App) SaveConfig() error {
 	a.cfg.Policy.DenyFilePatterns = a.engine.GetDenyPatterns()
 	a.cfg.Policy.AllowedDirectories = a.engine.GetAllowedDirectories()
+	a.cfg.Policy.DenyContentTags = a.engine.GetDenyContentTags()
 	a.cfg.Policy.DenyContentKeywords = a.engine.GetDenyContentKeywords()
-	a.cfg.Policy.ContentKeywordWhitelist = a.engine.GetContentKeywordWhitelist()
-	a.cfg.Policy.ContentKeywordBlacklist = a.engine.GetContentKeywordBlacklist()
+	a.cfg.Policy.ContentWhitelist = a.engine.GetContentWhitelist()
+	a.cfg.Policy.ContentBlacklist = a.engine.GetContentBlacklist()
 	return config.Save(a.cfgPath, a.cfg)
 }
 

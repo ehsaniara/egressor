@@ -82,7 +82,7 @@ func main() {
 		fmt.Println()
 	}
 	engine := policy.NewEngine(cfg.Policy)
-	interceptor := proxy.NewInterceptor(authority, cfg.Intercept.LogBody, cfg.Intercept.MaxBodySize, engine)
+	interceptor := proxy.NewInterceptor(authority, cfg.Intercept.LogBody, cfg.Intercept.MaxBodySize, engine, cfg.Intercept.SkipContentTypes)
 	slog.Info("TLS interception enabled")
 
 	if *headless {
@@ -111,39 +111,6 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
-const defaultConfig = `listen_address: "127.0.0.1:8080"
-
-policy:
-  # Block requests that reference files outside these directories.
-  # If empty, no directory scope is enforced.
-  allowed_directories:
-    # - "~/Projects/my-app"
-
-  deny_file_patterns:
-    - "*.env"
-    - "*.pem"
-    - "*.key"
-    - "**/secrets/**"
-    - "**/credentials*"
-    - ".aws/*"
-
-  # Keywords that trigger interactive approval before sending to LLM.
-  # deny_content_keywords:
-  #   - "CONFIDENTIAL"
-  #   - "INTERNAL ONLY"
-
-logging:
-  format: json
-  file: ~/.egressor/logs/audit.log
-  max_size_mb: 2
-
-intercept:
-  ca_cert: ~/.egressor/ca.pem
-  ca_key: ~/.egressor/ca-key.pem
-  log_body: true
-  max_body_size: 1048576
-`
-
 func resolveConfigPath(explicit string) string {
 	if explicit != "" {
 		return explicit
@@ -158,15 +125,22 @@ func resolveConfigPath(explicit string) string {
 		if _, err := os.Stat(p); err == nil {
 			return p
 		}
-		// 3. Auto-create default config at ~/.egressor/config.yaml
-		if err := os.MkdirAll(filepath.Dir(p), 0o755); err == nil {
-			if err := os.WriteFile(p, []byte(defaultConfig), 0o644); err == nil {
-				fmt.Printf("  Default config created at %s\n\n", p)
-				return p
-			}
-		}
 	}
-	return "config.yaml"
+	// No config found — tell the user how to set one up
+	home, _ := os.UserHomeDir()
+	defaultPath := filepath.Join(home, ".egressor", "config.yaml")
+	fmt.Println("No config file found. Egressor looked in:")
+	fmt.Println("  1. ./config.yaml")
+	fmt.Printf("  2. %s\n", defaultPath)
+	fmt.Println()
+	fmt.Println("To get started, create a config file:")
+	fmt.Printf("  mkdir -p %s\n", filepath.Dir(defaultPath))
+	fmt.Printf("  cp config.yaml %s\n", defaultPath)
+	fmt.Println()
+	fmt.Println("Or specify a path directly:")
+	fmt.Println("  egressor --config /path/to/config.yaml")
+	os.Exit(1)
+	return ""
 }
 
 func runHeadless(server *proxy.Server, cfg *config.Config) {

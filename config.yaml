@@ -1,31 +1,105 @@
+# Egressor Configuration
+# See https://github.com/ehsaniara/egressor for full documentation.
+
+# Address the proxy listens on. Only binds to localhost for security.
 listen_address: "127.0.0.1:8080"
 
 policy:
-  # Block requests that reference files outside these directories.
-  # If empty, no directory scope is enforced.
+
+  # --- Scope ---
+  # Restrict which directories LLM tools can access.
+  # Any file reference outside these directories will be blocked immediately.
+  # This prevents tools from reading ~/.ssh, /etc/passwd, or other projects.
+  # Leave empty to allow all directories (default).
   allowed_directories:
     # - "~/Projects/my-app"
 
+  # --- File patterns (hard block) ---
+  # Glob patterns that match sensitive file paths.
+  # If a request references a file matching any of these, it's blocked
+  # with a 403 — no prompt, no exceptions.
+  # Supports: * (any chars), ** (any depth), ? (single char)
   deny_file_patterns:
-    - "*.env"
-    - "*.pem"
-    - "*.key"
-    - "**/secrets/**"
-    - "**/credentials*"
-    - ".aws/*"
+    - "*.env"              # environment files (.env, .env.local)
+    - "*.pem"              # certificates
+    - "*.key"              # private keys
+    - "**/secrets/**"      # any file under a secrets/ directory
+    - "**/credentials*"    # credential files (credentials.json, etc.)
+    - ".aws/*"             # AWS config and credentials
 
-  # Keywords that trigger interactive approval before sending to LLM.
+  # --- File tags (hard block) ---
+  # Developers can add these tags as comments at the top of any file
+  # to prevent it from being sent to LLMs. For example:
+  #
+  #   // NO_LLM           (Go, JS, Java, C)
+  #   # NO_LLM            (Python, Ruby, YAML, Shell)
+  #   <!-- NO_LLM -->     (HTML, XML)
+  #
+  # When Egressor detects a tag in the request body, it blocks immediately.
+  # No prompt, no whitelist bypass — the developer said no.
+  deny_content_tags:
+    - "NO_LLM"
+
+  # --- Content keywords (interactive) ---
+  # When a request body contains any of these keywords, Egressor pauses
+  # the request and shows a prompt in the desktop UI asking what to do.
+  # Unlike tags above, keywords give the user a choice:
+  #
+  #   Allow Once    — send this time, don't remember
+  #   Allow Always  — send and add the file to content_whitelist
+  #   Block Once    — reject this time, don't remember
+  #   Block Always  — reject and add the file to content_blacklist
+  #
+  # In headless mode (no UI), keyword matches are blocked by default.
   deny_content_keywords:
     - "CONFIDENTIAL"
     - "INTERNAL ONLY"
 
+  # --- Whitelist / Blacklist (auto-managed) ---
+  # These lists are populated automatically when users choose
+  # "Allow Always" or "Block Always" from the keyword prompt.
+  # You can also edit them by hand if needed.
+  #
+  # Whitelisted files skip keyword prompts — they're always allowed through.
+  # Blacklisted files are blocked automatically when a keyword matches.
+  content_whitelist: []
+  content_blacklist: []
+
 logging:
+  # Log format. Currently only "json" is supported.
   format: json
+
+  # Where audit logs are written. Each intercepted session is logged as
+  # a single JSON line. Rotated automatically when the file exceeds max_size_mb.
   file: ~/.egressor/logs/audit.log
+
+  # Maximum log file size in MB before rotation. Rotated files are kept
+  # with a unix timestamp suffix (e.g. audit.log.1712345678).
   max_size_mb: 2
 
 intercept:
+  # Path to the CA certificate and key used for TLS interception.
+  # Auto-generated on first run if they don't exist.
   ca_cert: ~/.egressor/ca.pem
   ca_key: ~/.egressor/ca-key.pem
+
+  # Whether to capture request/response bodies in audit logs.
+  # Useful for debugging, but logs may contain sensitive data.
   log_body: true
+
+  # Maximum body size to capture in logs (in bytes). Bodies larger than
+  # this are truncated in logs but still forwarded to the upstream server.
   max_body_size: 1048576    # 1MB
+
+  # Content types to skip during scanning. Egressor only scans text-based
+  # payloads — it has no OCR or binary decoding, so images, archives, and
+  # other non-text formats are skipped entirely to avoid false positives.
+  # Supports wildcards (e.g. "image/*" matches image/png, image/jpeg, etc.)
+  skip_content_types:
+    - "image/*"
+    - "audio/*"
+    - "video/*"
+    - "application/octet-stream"
+    - "application/zip"
+    - "application/gzip"
+    - "application/pdf"
