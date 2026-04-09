@@ -53,9 +53,11 @@ func (a *App) Startup(ctx context.Context) {
 		slog.Error("failed to start proxy", "err", err)
 	}
 
-	// Start system tray icon (macOS menu bar)
+	// Set up system tray icon (macOS menu bar).
+	// Uses Register instead of Run to avoid starting a second NSApplication
+	// run loop — Wails already owns the main thread.
 	if tray.Available() {
-		go tray.Run(tray.Callbacks{
+		tray.Register(tray.Callbacks{
 			OnPauseToggle: func(paused bool) {
 				a.engine.SetBypassed(paused)
 				if paused {
