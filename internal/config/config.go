@@ -17,10 +17,11 @@ type Config struct {
 }
 
 type InterceptConfig struct {
-	CACert      string `yaml:"ca_cert"`
-	CAKey       string `yaml:"ca_key"`
-	LogBody     bool   `yaml:"log_body"`
-	MaxBodySize int    `yaml:"max_body_size"`
+	CACert           string   `yaml:"ca_cert"`
+	CAKey            string   `yaml:"ca_key"`
+	LogBody          bool     `yaml:"log_body"`
+	MaxBodySize      int      `yaml:"max_body_size"`
+	SkipContentTypes []string `yaml:"skip_content_types"`
 }
 
 type PolicyConfig struct {
@@ -64,6 +65,17 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.Intercept.MaxBodySize == 0 {
 		cfg.Intercept.MaxBodySize = 65536
+	}
+	if len(cfg.Intercept.SkipContentTypes) == 0 {
+		cfg.Intercept.SkipContentTypes = []string{
+			"image/*",
+			"audio/*",
+			"video/*",
+			"application/octet-stream",
+			"application/zip",
+			"application/gzip",
+			"application/pdf",
+		}
 	}
 	cfg.Intercept.CACert = expandHome(cfg.Intercept.CACert)
 	cfg.Intercept.CAKey = expandHome(cfg.Intercept.CAKey)

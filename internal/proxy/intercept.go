@@ -20,20 +20,22 @@ import (
 
 // Interceptor performs TLS interception (MITM) to capture HTTP traffic.
 type Interceptor struct {
-	certCache *ca.CertCache
-	logBody   bool
-	maxBody   int
-	policy    *policy.Engine
-	resolver  policy.PromptResolver
+	certCache        *ca.CertCache
+	logBody          bool
+	maxBody          int
+	policy           *policy.Engine
+	resolver         policy.PromptResolver
+	skipContentTypes []string
 }
 
 // NewInterceptor creates an interceptor backed by the given CA authority.
-func NewInterceptor(authority *ca.Authority, logBody bool, maxBody int, pol *policy.Engine) *Interceptor {
+func NewInterceptor(authority *ca.Authority, logBody bool, maxBody int, pol *policy.Engine, skipContentTypes []string) *Interceptor {
 	return &Interceptor{
-		certCache: ca.NewCertCache(authority),
-		logBody:   logBody,
-		maxBody:   maxBody,
-		policy:    pol,
+		certCache:        ca.NewCertCache(authority),
+		logBody:          logBody,
+		maxBody:          maxBody,
+		policy:           pol,
+		skipContentTypes: skipContentTypes,
 	}
 }
 
@@ -96,9 +98,12 @@ func (i *Interceptor) Intercept(clientConn net.Conn, upstreamConn net.Conn, host
 		}
 		bodyStr := reqBodyBuf.String()
 
+		// Skip content scanning for binary/non-text content types
+		skipScan := i.shouldSkipContentScan(req.Header.Get("Content-Type"))
+
 		// Extract file references from the request payload
 		files := extract.FilesFromBody(bodyStr)
-		if len(files) > 0 {
+		if len(files) > 0 && !skipScan {
 			for _, f := range files {
 				exchange.DetectedFiles = append(exchange.DetectedFiles, audit.FileRef{
 					Path:   f.Path,
@@ -379,6 +384,32 @@ func stripHopByHop(h http.Header) {
 	for _, header := range hopByHopHeaders {
 		h.Del(header)
 	}
+}
+
+// shouldSkipContentScan checks if the request content type matches any skip pattern.
+// Supports wildcards like "image/*".
+func (i *Interceptor) shouldSkipContentScan(contentType string) bool {
+	if contentType == "" {
+		return false
+	}
+	ct := strings.ToLower(strings.TrimSpace(contentType))
+	// Strip parameters (e.g. "text/plain; charset=utf-8" → "text/plain")
+	if idx := strings.IndexByte(ct, ';'); idx >= 0 {
+		ct = strings.TrimSpace(ct[:idx])
+	}
+	for _, skip := range i.skipContentTypes {
+		skip = strings.ToLower(skip)
+		if strings.HasSuffix(skip, "/*") {
+			// Wildcard match: "image/*" matches "image/png"
+			prefix := skip[:len(skip)-1] // "image/"
+			if strings.HasPrefix(ct, prefix) {
+				return true
+			}
+		} else if ct == skip {
+			return true
+		}
+	}
+	return false
 }
 
 func truncateBody(body string, max int) string {
