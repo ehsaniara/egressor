@@ -75,7 +75,7 @@ function App() {
             )}
           </>
         ) : (
-          <div className="w-full max-w-2xl overflow-auto">
+          <div className="w-full overflow-auto">
             <PolicyEditor
               patterns={policy.patterns}
               onAdd={policy.addPattern}

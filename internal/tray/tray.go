@@ -13,10 +13,11 @@ type Callbacks struct {
 	OnQuit        func()            // called when user clicks Quit
 }
 
-// Run starts the systray on the main thread. It blocks until quit.
-// Must be called from the main goroutine on macOS.
-func Run(cb Callbacks) {
-	systray.Run(func() {
+// Register sets up the systray without starting its own event loop.
+// This must be used when another framework (like Wails) already owns
+// the main thread and NSApplication run loop on macOS.
+func Register(cb Callbacks) {
+	systray.Register(func() {
 		systray.SetTemplateIcon(iconData, iconData)
 		systray.SetTitle("")
 		systray.SetTooltip("Egressor — egress monitor")
